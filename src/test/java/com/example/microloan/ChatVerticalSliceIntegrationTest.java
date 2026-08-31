@@ -88,6 +88,38 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.code").value("LOAN_ACCESS_DENIED"));
     }
 
+    @Test
+    void loginDoesNotRevealWhetherCustomerOrPasswordWasWrong() throws Exception {
+        String expectedMessage = "客户编号或密码错误";
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerNo":"C10001","password":"wrong-password"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(expectedMessage));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerNo":"C-NOT-FOUND","password":"wrong-password"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(expectedMessage));
+    }
+
+    @Test
+    void protectedBusinessApiRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/loans/L10001/next-repayment"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
+                .andExpect(jsonPath("$.message").value("需要登录后访问"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
     private String login(String customerNo) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

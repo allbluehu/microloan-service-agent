@@ -1,8 +1,8 @@
--- The {noop} credential is restricted to local demo data and must never be used in a real deployment.
+-- Both demo customers use Demo123!; only its BCrypt hash is stored.
 INSERT INTO customer (id, customer_no, name, password_hash, mobile_mask, status)
 VALUES
-    (10001, 'C10001', '张三', '{noop}Demo123!', '138****0001', 'ACTIVE'),
-    (10002, 'C10002', '李四', '{noop}Demo123!', '138****0002', 'ACTIVE');
+    (10001, 'C10001', '张三', '{bcrypt}$2y$12$RyawfIWNFhQjgQT.TJhRleFYBs7zn6S5nASOrzqpM5.ysQHfWUnfm', '138****0001', 'ACTIVE'),
+    (10002, 'C10002', '李四', '{bcrypt}$2y$12$RyawfIWNFhQjgQT.TJhRleFYBs7zn6S5nASOrzqpM5.ysQHfWUnfm', '138****0002', 'ACTIVE');
 
 INSERT INTO loan (id, loan_no, customer_id, principal, annual_rate, term, status)
 VALUES
