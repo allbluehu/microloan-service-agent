@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: microloan-service-agent
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/microloan}
+    username: ${DB_USERNAME:microloan}
+    password: ${DB_PASSWORD:microloan}
+  ai:
+    model:
+      chat: ${AI_CHAT_MODEL:none}
+    openai:
+      api-key: ${OPENAI_API_KEY:unused-when-ai-disabled}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4.1-mini}
+          temperature: 0
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+security:
+  jwt:
+    # Local default is intentionally non-production; deployments must provide a 32+ byte secret.
+    secret: ${JWT_SECRET:local-development-secret-change-me-32-bytes}
+    ttl: 1h
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

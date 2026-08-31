@@ -4,7 +4,13 @@
 
 ## 当前状态
 
-阶段：迭代零（设计文档）完成，工程快修完成。迭代一（最小纵切）未开工。
+阶段：迭代零（设计文档）完成，工程快修完成。迭代一（最小纵切）进行中，首条账单查询链路已跑通。
+
+## 投入纪律
+
+- 必须完成线：v0.3（纵切 + Agent 状态机 + RAG）；v0.4/v1.0 是加分项，不是承诺。
+- 止损规则：迭代一纵切两周内未跑通闭环，降级为仅 RAG 问答项目，不让项目烂在半路。
+- 砍减顺序：Vue 前端 → 评测看板 → 长期会话增强；安全测试与评测集不砍（差异化所在）。
 
 ## 已完成
 
@@ -16,12 +22,19 @@
 - [x] Resilience4j 边界澄清：超时、熔断、降级属 MVP（迭代四）；限流属增强功能
 - [x] 迭代计划重排：迭代一改为纵切优先（第一周即打通业务 + AI 单场景闭环）
 - [x] IDEA 本地配置修正：语言级别与字节码目标 JDK 1.8 → 21
+- [x] 初始化 Maven 工程并钉死 Spring Boot 3.5.16、Spring AI 1.0.9、Java 21
+- [x] 建立 customer、loan、repayment_plan 三表、Flyway 迁移与虚构种子数据
+- [x] 实现 JWT 登录、loan 资源归属校验和下一期账单业务 API
+- [x] 实现 Spring AI 意图分类入口、规则降级、账单工具与非流式对话接口
+- [x] 使用 Testcontainers 验证登录、账单对话闭环及 API/Agent 两层横向越权拦截（当前共 6 个测试）
 
 ## 下一步：迭代一开工清单
 
-- [ ] IDEA Settings → Build Tools → Maven 改用 Bundled（当前指向 `~/File/apache-maven-3.3.9`，低于 Spring Boot 3 要求的 3.6.3+）
-- [ ] 初始化 Maven 工程：Java 21 + Spring Boot 3.4+ 当前稳定版；核对 Spring AI 1.0.x 兼容矩阵后把两者小版本钉死写进 pom，模型 Base URL / API Key 走环境变量，仓库只放 `.env.example`
-- [ ] 按 `06-实施计划与面试展示.md` 迭代一执行：customer/loan/repayment_plan 三表 + 种子数据、JWT 登录与资源归属校验、getNextRepaymentPlan 工具、Spring AI 意图分类、对话接口跑通单一场景
+- [x] 确认命令行 Maven 3.9.9，满足 Spring Boot 3.5.16 对 Maven 3.6.3+ 的要求；IDEA 可按个人习惯选择 Bundled 或该版本
+- [x] 初始化 Maven 工程：Java 21 + Spring Boot 3.5.16 + Spring AI 1.0.9；模型配置走环境变量，仓库只放 `.env.example`
+- [x] 打通迭代一纵切：三表 + 种子数据、JWT 与归属校验、getNextRepaymentPlan 工具、意图分类、对话接口和 Testcontainers 测试
+- [ ] 配置可用模型凭据，验证真实模型意图分类；未配置或模型失败时保持规则降级
+- [ ] 将演示数据的 `{noop}` 密码替换为 BCrypt 哈希，并增加失败登录测试
 
 ## 开放问题（到对应迭代再补，不阻塞开工）
 
