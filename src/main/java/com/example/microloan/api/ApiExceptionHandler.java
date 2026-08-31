@@ -2,6 +2,7 @@ package com.example.microloan.api;
 
 import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.repayment.LoanAccessDeniedException;
+import com.example.microloan.settlement.StepUpAuthRequiredException;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", exception.getMessage());
+    }
+
+    @ExceptionHandler(StepUpAuthRequiredException.class)
+    ResponseEntity<ApiError> handleStepUpRequired(StepUpAuthRequiredException exception) {
+        return problem(HttpStatus.FORBIDDEN, "STEP_UP_AUTH_REQUIRED", exception.getMessage());
     }
 
     @ExceptionHandler(ResponseStatusException.class)

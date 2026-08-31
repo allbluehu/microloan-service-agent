@@ -31,4 +31,10 @@ class IntentClassifierTest {
         assertThat(classifier.classify("查一下这笔贷款的还款记录"))
                 .isEqualTo(Intent.PAYMENT_RECORDS_QUERY);
     }
+
+    @Test
+    void recognizesEarlySettlementQuestionWithoutAConfiguredModel() {
+        assertThat(classifier.classify("9月3日提前结清要多少钱？"))
+                .isEqualTo(Intent.EARLY_SETTLEMENT_QUOTE);
+    }
 }

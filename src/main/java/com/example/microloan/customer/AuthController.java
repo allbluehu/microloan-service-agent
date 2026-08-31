@@ -1,10 +1,12 @@
 package com.example.microloan.customer;
 
 import com.example.microloan.security.JwtService;
+import com.example.microloan.security.CustomerPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,7 +38,21 @@ public class AuthController {
         return new LoginResponse(jwtService.issue(customer.id(), customer.customerNo()), "Bearer", 3600);
     }
 
+    @PostMapping("/step-up")
+    public LoginResponse stepUp(@AuthenticationPrincipal CustomerPrincipal principal,
+                                @Valid @RequestBody StepUpRequest request) {
+        Customer customer = customerMapper.findByCustomerNo(principal.customerNo());
+        if (customer == null || !"ACTIVE".equals(customer.status())
+                || !passwordEncoder.matches(request.password(), customer.passwordHash())) {
+            // Re-authentication uses the same generic failure semantics as initial login.
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "二次认证失败");
+        }
+        return new LoginResponse(jwtService.issueStepUp(customer.id(), customer.customerNo()), "Bearer", 300);
+    }
+
     public record LoginRequest(@NotBlank String customerNo, @NotBlank String password) {}
+
+    public record StepUpRequest(@NotBlank String password) {}
 
     public record LoginResponse(String accessToken, String tokenType, long expiresIn) {}
 }

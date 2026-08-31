@@ -221,6 +221,52 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 
+    @Test
+    void earlySettlementRequiresStepUpAndUsesJavaCalculatedAmounts() throws Exception {
+        String loginToken = login("C10001");
+        String request = """
+                {
+                  "messageId": "M10007",
+                  "content": "9月3日提前结清要多少钱？",
+                  "selectedLoanId": "L10001",
+                  "settlementDate": "2026-09-03"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + loginToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("STEP_UP_AUTH_REQUIRED"));
+
+        String stepUpToken = stepUp(loginToken);
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + stepUpToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("EARLY_SETTLEMENT_QUOTE"))
+                .andExpect(jsonPath("$.businessCard.remainingPrincipal").value("8200.00"))
+                .andExpect(jsonPath("$.businessCard.interest").value("33.70"))
+                .andExpect(jsonPath("$.businessCard.totalAmount").value("8233.70"))
+                .andExpect(jsonPath("$.businessCard.notice").value("该结果仅为试算，不代表已经结清"));
+    }
+
+    @Test
+    void stepUpTokenStillCannotSettleAnotherCustomersLoan() throws Exception {
+        String stepUpToken = stepUp(login("C10001"));
+
+        mockMvc.perform(post("/api/v1/loans/L99999/settlement-quotes")
+                        .header("Authorization", "Bearer " + stepUpToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"settlementDate":"2026-09-03"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOAN_ACCESS_DENIED"));
+    }
+
     private String login(String customerNo) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -231,5 +277,18 @@ class ChatVerticalSliceIntegrationTest {
                 .andReturn();
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         return body.get("accessToken").asText();
+    }
+
+    private String stepUp(String loginToken) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/step-up")
+                        .header("Authorization", "Bearer " + loginToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"password":"Demo123!"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expiresIn").value(300))
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("accessToken").asText();
     }
 }

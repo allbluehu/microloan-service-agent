@@ -10,10 +10,11 @@ public class IntentClassifier {
 
     private static final String PROMPT = """
             你是小额贷客服意图分类器。只输出以下一个标签：
-            NEXT_REPAYMENT_QUERY、APPLICATION_STATUS_QUERY、PAYMENT_RECORDS_QUERY、UNKNOWN。
+            NEXT_REPAYMENT_QUERY、APPLICATION_STATUS_QUERY、PAYMENT_RECORDS_QUERY、EARLY_SETTLEMENT_QUOTE、UNKNOWN。
             NEXT_REPAYMENT_QUERY 表示用户在询问下一期、下个月或近期应还金额/日期。
             APPLICATION_STATUS_QUERY 表示用户在询问贷款申请的进度、状态或缺失资料。
             PAYMENT_RECORDS_QUERY 表示用户在询问过去的还款记录、支付记录或某次还款是否成功。
+            EARLY_SETTLEMENT_QUOTE 表示用户希望试算提前还清或提前结清贷款的金额。
             用户输入：%s
             """;
 
@@ -35,6 +36,9 @@ public class IntentClassifier {
                 if (output.contains("PAYMENT_RECORDS_QUERY")) {
                     return Intent.PAYMENT_RECORDS_QUERY;
                 }
+                if (output.contains("EARLY_SETTLEMENT_QUOTE")) {
+                    return Intent.EARLY_SETTLEMENT_QUOTE;
+                }
                 return output.contains("NEXT_REPAYMENT_QUERY") ? Intent.NEXT_REPAYMENT_QUERY : Intent.UNKNOWN;
             } catch (RuntimeException ignored) {
                 // Classification can safely degrade to narrow rules; business facts never come from this fallback.
@@ -44,6 +48,9 @@ public class IntentClassifier {
     }
 
     private Intent ruleFallback(String message) {
+        if (message.contains("提前结清") || message.contains("提前还清")) {
+            return Intent.EARLY_SETTLEMENT_QUOTE;
+        }
         boolean historicalPayment = message.contains("还款记录") || message.contains("支付记录")
                 || message.contains("还款历史") || message.contains("还款成功") || message.contains("扣款记录");
         if (historicalPayment) {

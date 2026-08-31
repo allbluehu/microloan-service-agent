@@ -1,3 +1,3 @@
 package com.example.microloan.security;
 
-public record CustomerPrincipal(Long customerId, String customerNo) {}
+public record CustomerPrincipal(Long customerId, String customerNo, AuthLevel authLevel) {}

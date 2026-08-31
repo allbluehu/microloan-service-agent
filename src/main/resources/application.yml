@@ -25,6 +25,7 @@ security:
     # Local default is intentionally non-production; deployments must provide a 32+ byte secret.
     secret: ${JWT_SECRET:local-development-secret-change-me-32-bytes}
     ttl: 1h
+    step-up-ttl: 5m
 
 management:
   endpoints:
