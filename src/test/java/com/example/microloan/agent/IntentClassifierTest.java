@@ -25,4 +25,10 @@ class IntentClassifierTest {
         assertThat(classifier.classify("我的贷款申请进度到哪了？"))
                 .isEqualTo(Intent.APPLICATION_STATUS_QUERY);
     }
+
+    @Test
+    void recognizesPaymentHistoryQuestionWithoutAConfiguredModel() {
+        assertThat(classifier.classify("查一下这笔贷款的还款记录"))
+                .isEqualTo(Intent.PAYMENT_RECORDS_QUERY);
+    }
 }

@@ -164,6 +164,63 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.code").value("APPLICATION_ACCESS_DENIED"));
     }
 
+    @Test
+    void authenticatedCustomerCanQueryMaskedPaymentRecordsThroughAgent() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M10005",
+                                  "content": "查一下这笔贷款的还款记录",
+                                  "selectedLoanId": "L10001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("PAYMENT_RECORDS_QUERY"))
+                .andExpect(jsonPath("$.businessCard.loanId").value("L10001"))
+                .andExpect(jsonPath("$.businessCard.records.length()").value(2))
+                .andExpect(jsonPath("$.businessCard.records[0].bankCardLastFour").value("1234"))
+                .andExpect(jsonPath("$.businessCard.records[0].amount").value("1262.50"));
+    }
+
+    @Test
+    void customerCannotReadAnotherCustomersPaymentsThroughApiOrAgent() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(get("/api/v1/loans/L99999/payments")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOAN_ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M10006",
+                                  "content": "查询还款记录",
+                                  "selectedLoanId": "L99999"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOAN_ACCESS_DENIED"));
+    }
+
+    @Test
+    void paymentApiRejectsAnInvalidTimeRange() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(get("/api/v1/loans/L10001/payments")
+                        .header("Authorization", "Bearer " + token)
+                        .queryParam("from", "2026-09-01T00:00:00+08:00")
+                        .queryParam("to", "2026-08-01T00:00:00+08:00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
     private String login(String customerNo) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

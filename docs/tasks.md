@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段：迭代一（最小纵切）本地工程闭环完成；迭代二进行中，申请进度工具链与 Agent 确定性路由已完成。真实模型联调等待可用凭据。
+阶段：迭代一（最小纵切）本地工程闭环完成；迭代二进行中，申请进度、还款记录工具链与 Agent 确定性路由已完成。真实模型联调等待可用凭据。
 
 ## 投入纪律
 
@@ -31,6 +31,8 @@
 - [x] 建立 loan_application 表、申请进度 API 与 getApplicationStatus 工具
 - [x] 从单场景 Controller 抽出 AgentOrchestrator，并引入 AgentState 与 sealed ToolResult
 - [x] 验证申请进度对话及 API/Agent 两层横向越权拦截（当前共 11 个测试）
+- [x] 建立 payment_record 表、还款记录 API 与 getPaymentRecords 工具
+- [x] 在数据库和服务层限制查询范围，业务 DTO 仅暴露银行卡尾号（当前共 17 个测试）
 
 ## 下一步
 
@@ -39,8 +41,8 @@
 - [x] 打通迭代一纵切：三表 + 种子数据、JWT 与归属校验、getNextRepaymentPlan 工具、意图分类、对话接口和 Testcontainers 测试
 - [ ] 配置可用模型凭据，验证真实模型意图分类；未配置或模型失败时保持规则降级
 - [x] 将演示数据密码替换为 BCrypt 哈希，并覆盖错误密码、未知客户和未认证访问测试
-- [ ] 建立 payment、ticket 表与业务模块
-- [ ] 实现支付记录、提前结清试算和幂等工单工具链
+- [ ] 建立 ticket 表与业务模块
+- [ ] 实现提前结清试算和幂等工单工具链
 - [ ] 增加风险分类、认证不足、歧义和工具失败路线
 - [ ] 保存节点级 Agent Trace
 

@@ -1,6 +1,7 @@
 package com.example.microloan.agent;
 
 import com.example.microloan.application.ApplicationStatus;
+import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -11,12 +12,14 @@ public class AgentOrchestrator {
     private final IntentClassifier intentClassifier;
     private final RepaymentTools repaymentTools;
     private final ApplicationTools applicationTools;
+    private final PaymentTools paymentTools;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
-                             ApplicationTools applicationTools) {
+                             ApplicationTools applicationTools, PaymentTools paymentTools) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
+        this.paymentTools = paymentTools;
     }
 
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
@@ -29,7 +32,8 @@ public class AgentOrchestrator {
         return switch (state.intent()) {
             case NEXT_REPAYMENT_QUERY -> queryNextRepayment(state);
             case APPLICATION_STATUS_QUERY -> queryApplicationStatus(state);
-            case UNKNOWN -> state.complete("当前支持查询下一期账单和贷款申请进度，请补充具体问题。");
+            case PAYMENT_RECORDS_QUERY -> queryPaymentRecords(state);
+            case UNKNOWN -> state.complete("当前支持查询下一期账单、贷款申请进度和还款记录，请补充具体问题。");
         };
     }
 
@@ -55,6 +59,18 @@ public class AgentOrchestrator {
                 : "待补资料：" + String.join("、", status.missingDocuments()) + "。";
         return state.complete(new ToolResult.Application(status), "申请%s当前状态为%s，更新时间为%s。%s"
                 .formatted(status.applicationId(), status.status(), status.updatedAt(), todo));
+    }
+
+    private AgentState queryPaymentRecords(AgentState state) {
+        if (isBlank(state.selectedLoanId())) {
+            return state.complete("请先选择需要查询还款记录的贷款。");
+        }
+        PaymentHistory history = paymentTools.getPaymentRecords(state.selectedLoanId());
+        String answer = history.records().isEmpty()
+                ? "未查询到该贷款的还款记录。"
+                : "已查询到贷款%s最近%s条还款记录，请查看业务卡片。"
+                        .formatted(history.loanId(), history.records().size());
+        return state.complete(new ToolResult.Payment(history), answer);
     }
 
     private boolean isBlank(String value) {

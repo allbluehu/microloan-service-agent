@@ -28,6 +28,11 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "请求参数不合法");
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", exception.getMessage());
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException exception) {
         HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
