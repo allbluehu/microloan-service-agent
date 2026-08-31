@@ -19,4 +19,10 @@ class IntentClassifierTest {
     void keepsUnsupportedIntentUnknown() {
         assertThat(classifier.classify("怎么申请贷款？")).isEqualTo(Intent.UNKNOWN);
     }
+
+    @Test
+    void recognizesApplicationStatusQuestionWithoutAConfiguredModel() {
+        assertThat(classifier.classify("我的贷款申请进度到哪了？"))
+                .isEqualTo(Intent.APPLICATION_STATUS_QUERY);
+    }
 }

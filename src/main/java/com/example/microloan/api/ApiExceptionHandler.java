@@ -1,5 +1,6 @@
 package com.example.microloan.api;
 
+import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.repayment.LoanAccessDeniedException;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(LoanAccessDeniedException.class)
     ResponseEntity<ApiError> handleLoanAccessDenied(LoanAccessDeniedException exception) {
         return problem(HttpStatus.FORBIDDEN, "LOAN_ACCESS_DENIED", exception.getMessage());
+    }
+
+    @ExceptionHandler(ApplicationAccessDeniedException.class)
+    ResponseEntity<ApiError> handleApplicationAccessDenied(ApplicationAccessDeniedException exception) {
+        return problem(HttpStatus.FORBIDDEN, "APPLICATION_ACCESS_DENIED", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

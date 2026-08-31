@@ -120,6 +120,50 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
+    @Test
+    void authenticatedCustomerCanQueryApplicationStatusThroughAgent() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M10003",
+                                  "content": "我的贷款申请进度到哪了？",
+                                  "selectedApplicationId": "A10001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("APPLICATION_STATUS_QUERY"))
+                .andExpect(jsonPath("$.businessCard.applicationId").value("A10001"))
+                .andExpect(jsonPath("$.businessCard.status").value("PENDING_DOCUMENT"))
+                .andExpect(jsonPath("$.businessCard.missingDocuments[0]").value("营业执照"));
+    }
+
+    @Test
+    void customerCannotReadAnotherCustomersApplicationThroughApiOrAgent() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(get("/api/v1/applications/A99999")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPLICATION_ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M10004",
+                                  "content": "查询申请状态",
+                                  "selectedApplicationId": "A99999"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPLICATION_ACCESS_DENIED"));
+    }
+
     private String login(String customerNo) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

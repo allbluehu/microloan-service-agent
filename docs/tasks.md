@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-阶段：迭代零（设计文档）完成。迭代一（最小纵切）本地工程闭环完成；真实模型联调等待可用凭据。
+阶段：迭代一（最小纵切）本地工程闭环完成；迭代二进行中，申请进度工具链与 Agent 确定性路由已完成。真实模型联调等待可用凭据。
 
 ## 投入纪律
 
@@ -28,20 +28,27 @@
 - [x] 实现 Spring AI 意图分类入口、规则降级、账单工具与非流式对话接口
 - [x] 使用 Testcontainers 验证登录、账单对话闭环及 API/Agent 两层横向越权拦截（当前共 8 个测试）
 - [x] 统一 MVC 与 Security Filter 的 `code/message/traceId` 错误响应契约
+- [x] 建立 loan_application 表、申请进度 API 与 getApplicationStatus 工具
+- [x] 从单场景 Controller 抽出 AgentOrchestrator，并引入 AgentState 与 sealed ToolResult
+- [x] 验证申请进度对话及 API/Agent 两层横向越权拦截（当前共 11 个测试）
 
-## 下一步：迭代一开工清单
+## 下一步
 
 - [x] 确认命令行 Maven 3.9.9，满足 Spring Boot 3.5.16 对 Maven 3.6.3+ 的要求；IDEA 可按个人习惯选择 Bundled 或该版本
 - [x] 初始化 Maven 工程：Java 21 + Spring Boot 3.5.16 + Spring AI 1.0.9；模型配置走环境变量，仓库只放 `.env.example`
 - [x] 打通迭代一纵切：三表 + 种子数据、JWT 与归属校验、getNextRepaymentPlan 工具、意图分类、对话接口和 Testcontainers 测试
 - [ ] 配置可用模型凭据，验证真实模型意图分类；未配置或模型失败时保持规则降级
 - [x] 将演示数据密码替换为 BCrypt 哈希，并覆盖错误密码、未知客户和未认证访问测试
+- [ ] 建立 payment、ticket 表与业务模块
+- [ ] 实现支付记录、提前结清试算和幂等工单工具链
+- [ ] 增加风险分类、认证不足、歧义和工具失败路线
+- [ ] 保存节点级 Agent Trace
 
 ## 开放问题（到对应迭代再补，不阻塞开工）
 
 - 意图分类的结构化输出 schema：JSON 结构、置信度字段、解析失败处理
 - 路由伪代码缺 unknown / 低置信度意图兜底分支
-- `AgentState.toolResult` 用 `Object` 承载，实现时改 sealed interface
+- [x] `AgentState.toolResult` 已使用 sealed interface，具体业务 DTO 通过同包 wrapper 封装
 - prompt 版本的存储 / 外部化方案：`agent_trace` 有 `prompt_version` 字段但无管理载体（加表或明确文件方案）
 - `chat_session` / `chat_message` 表结构：ER 图有实体、`04` 核心表一节缺失
 - RAG 待定项：rerank 手段（cross-encoder vs LLM 重排）、语义切分参数（chunk size / overlap）、embedding 模型与维度（DDL 中 `VECTOR(1024)` 仅为示意）
