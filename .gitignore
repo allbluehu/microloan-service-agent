@@ -1,0 +1,23 @@
+# IDE
+.idea/
+*.iml
+out/
+
+# Build
+target/
+build/
+
+# 环境变量与密钥（仓库只提交 .env.example）
+.env
+.env.local
+
+# 日志
+*.log
+logs/
+
+# OS
+.DS_Store
+
+# 前端（迭代五）
+node_modules/
+dist/
