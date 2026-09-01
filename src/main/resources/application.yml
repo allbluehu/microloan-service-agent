@@ -22,6 +22,8 @@ spring:
           dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1024}
 
 knowledge:
+  ingestion:
+    chunk-max-characters: ${KNOWLEDGE_CHUNK_MAX_CHARACTERS:800}
   vector:
     enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
     indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}
