@@ -4,7 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.List;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.junit.jupiter.api.Test;
 
 class KnowledgeMarkdownParserTest {
@@ -61,6 +65,24 @@ class KnowledgeMarkdownParserTest {
         assertThat(chunks.size()).isGreaterThan(2);
         assertThat(chunks).allMatch(chunk -> chunk.content().length() <= 120);
         assertThat(chunks.getFirst().content()).endsWith("。");
+    }
+
+    @Test
+    void allClasspathKnowledgeAssetsAreValidAndUniquelyVersioned() throws Exception {
+        Resource[] resources = new PathMatchingResourcePatternResolver()
+                .getResources("classpath*:knowledge/*.md");
+        KnowledgeMarkdownChunker chunker = new KnowledgeMarkdownChunker(800);
+        HashSet<String> identities = new HashSet<>();
+
+        assertThat(resources).hasSize(10);
+        for (Resource resource : resources) {
+            KnowledgeMarkdownDocument document = parser.parse(
+                    resource.getContentAsString(StandardCharsets.UTF_8));
+            assertThat(identities.add(document.documentNo() + ":" + document.version()))
+                    .as("文档号与版本必须唯一：%s", resource.getFilename())
+                    .isTrue();
+            assertThat(chunker.chunk(document)).isNotEmpty();
+        }
     }
 
     private String markdown(String lineSeparator) {

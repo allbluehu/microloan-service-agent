@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.microloan.knowledge.KnowledgeAnswer;
 import com.example.microloan.knowledge.KnowledgeChunkForEmbedding;
+import com.example.microloan.knowledge.KnowledgeClasspathImporter;
 import com.example.microloan.knowledge.KnowledgeEvidence;
 import com.example.microloan.knowledge.KnowledgeImportResult;
 import com.example.microloan.knowledge.KnowledgeImportService;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -78,6 +80,9 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private KnowledgePublicationService knowledgePublicationService;
+
+    @Autowired
+    private ResourcePatternResolver resourcePatternResolver;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -429,6 +434,27 @@ class ChatVerticalSliceIntegrationTest {
         assertThat(expired.status()).isEqualTo("EXPIRED");
         assertThat(expired.expiredAt()).isNotNull();
         assertThat(knowledgeMapper.searchPublished("发布测试", "MICRO_BUSINESS", "ALL", 3)).isEmpty();
+    }
+
+    @Test
+    void classpathKnowledgeBootstrapImportsTenDraftsIdempotently() throws Exception {
+        KnowledgeClasspathImporter importer = new KnowledgeClasspathImporter(
+                resourcePatternResolver, knowledgeImportService, 1024 * 1024);
+
+        importer.run(null);
+        importer.run(null);
+
+        List<String> expectedDocuments = List.of(
+                "KB-MB-MATERIALS", "KB-MB-ELIGIBILITY", "KB-MB-PROCESS", "KB-MB-TERM",
+                "KB-GENERAL-REPAYMENT", "KB-GENERAL-SETTLEMENT", "KB-PC-MATERIALS",
+                "KB-PC-PROCESS", "KB-SERVICE-PAYMENT-NOT-POSTED", "KB-SERVICE-ACCOUNT-SECURITY");
+        for (String documentNo : expectedDocuments) {
+            KnowledgeDocumentIdentity document = knowledgeMapper.findDocumentIdentity(documentNo, "2026.1");
+            assertThat(document).isNotNull();
+            assertThat(document.status()).isEqualTo("DRAFT");
+            assertThat(knowledgeMapper.countChunks(document.id())).isPositive();
+        }
+        assertThat(knowledgeMapper.searchPublished("账户安全", "GENERAL_SERVICE", "ALL", 3)).isEmpty();
     }
 
     @Test
