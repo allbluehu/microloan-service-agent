@@ -11,6 +11,7 @@ mvn test
 ```
 
 测试通过 Testcontainers 自动启动 PostgreSQL，并执行 Flyway 迁移。首次运行需要拉取 `postgres:16-alpine` 和 Testcontainers Ryuk 镜像。
+测试套件包含 50 条确定性 RAG 基线，用于约束证据召回、跨产品隔离和无答案拒答。
 
 ## 本地启动
 

@@ -48,5 +48,5 @@
   {"question":"消费贷需要什么材料？","selectedProductCode":"MICRO_BUSINESS","expectRefusal":true},
   {"question":"经营贷内部审核阈值是多少？","expectRefusal":true},
   {"question":"经营贷旧版只要营业执照吗？","expectRefusal":true},
-  {"question":"火星地区经营贷需要什么材料？","selectedRegion":"MARS","expectRefusal":true}
+  {"question":"火星地区经营贷有哪些费用？","selectedRegion":"MARS","expectRefusal":true}
 ]
