@@ -63,6 +63,7 @@
 - [x] 持久化贷款、申请、产品和地区会话槽位，同一客户后续轮次可复用资源标识但业务事实始终实时查询（当前共 61 个测试）
 - [x] 使用数据库唯一约束避免重复聊天记录；重复 messageId 继续复用确定性业务流程及工具幂等结果（当前共 62 个测试）
 - [x] 明确复合意图优先级：高风险与人工优先，多个普通业务动作要求澄清且不调用工具（当前共 65 个测试）
+- [x] 在全文/向量召回与 RRF 后增加确定性词项覆盖重排，覆盖相同时保留原始分数（当前共 67 个测试）
 
 ## 下一步
 
@@ -90,6 +91,6 @@
 - [x] `AgentState.toolResult` 已使用 sealed interface，具体业务 DTO 通过同包 wrapper 封装
 - [x] prompt 采用版本化 classpath 文件管理；`agent_trace.prompt_version` 直接引用分类器版本常量，避免双处配置漂移
 - [x] `chat_session` / `chat_message` 已落库并接入对话写入；业务事实仍实时查询，不从消息历史恢复
-- RAG 待定项：rerank 手段（cross-encoder vs LLM 重排）、语义切分参数（chunk size / overlap）；Embedding 已确定为 text-embedding-3-small 的 1024 维输出
+- [x] MVP 重排采用候选集内词项覆盖数 + 原始分数，不增加 cross-encoder/LLM 延迟；语义切分参数后续用评测调优
 - 重试 / 超时参数量化：重试次数、退避策略、可重试错误类别（429 / 5xx / 超时）
 - [x] 复合意图采用单目标执行：高风险投诉 > 明确人工 > 多普通动作澄清 > 单一意图路由

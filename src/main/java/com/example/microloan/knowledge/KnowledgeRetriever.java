@@ -20,13 +20,16 @@ public class KnowledgeRetriever {
     private final KnowledgeMapper knowledgeMapper;
     private final Optional<EmbeddingModel> embeddingModel;
     private final boolean vectorEnabled;
+    private final KnowledgeReranker reranker;
 
     public KnowledgeRetriever(KnowledgeMapper knowledgeMapper,
                               ObjectProvider<EmbeddingModel> embeddingModelProvider,
-                              @Value("${knowledge.vector.enabled:false}") boolean vectorEnabled) {
+                              @Value("${knowledge.vector.enabled:false}") boolean vectorEnabled,
+                              KnowledgeReranker reranker) {
         this.knowledgeMapper = knowledgeMapper;
         this.embeddingModel = Optional.ofNullable(embeddingModelProvider.getIfAvailable());
         this.vectorEnabled = vectorEnabled;
+        this.reranker = reranker;
     }
 
     public List<KnowledgeEvidence> retrieve(KnowledgeQuery query) {
@@ -34,14 +37,15 @@ public class KnowledgeRetriever {
                 query.searchText(), query.productCode(), query.region(), CANDIDATE_LIMIT);
         if (!vectorEnabled || embeddingModel.isEmpty()) {
             // 向量能力是可选增强；缺少模型或未启用时保留可审计的全文检索路径。
-            return fullText.stream().limit(RESULT_LIMIT).toList();
+            return reranker.rerank(query.searchText(), fullText, RESULT_LIMIT);
         }
 
         String queryVector = KnowledgeVectorCodec.encode(
                 embeddingModel.orElseThrow().embed(query.searchText()), EMBEDDING_DIMENSIONS);
         List<KnowledgeEvidence> vector = knowledgeMapper.searchPublishedByVector(
                 queryVector, query.productCode(), query.region(), CANDIDATE_LIMIT);
-        return reciprocalRankFusion(fullText, vector, RESULT_LIMIT);
+        List<KnowledgeEvidence> fused = reciprocalRankFusion(fullText, vector, CANDIDATE_LIMIT);
+        return reranker.rerank(query.searchText(), fused, RESULT_LIMIT);
     }
 
     static List<KnowledgeEvidence> reciprocalRankFusion(List<KnowledgeEvidence> fullText,
