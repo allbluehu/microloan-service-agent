@@ -19,10 +19,13 @@ public class IntentClassifier {
 
     private final ObjectProvider<ChatModel> chatModelProvider;
     private final ObjectMapper objectMapper;
+    private final ModelCallExecutor modelCallExecutor;
 
-    public IntentClassifier(ObjectProvider<ChatModel> chatModelProvider, ObjectMapper objectMapper) {
+    public IntentClassifier(ObjectProvider<ChatModel> chatModelProvider, ObjectMapper objectMapper,
+                            ModelCallExecutor modelCallExecutor) {
         this.chatModelProvider = chatModelProvider;
         this.objectMapper = objectMapper;
+        this.modelCallExecutor = modelCallExecutor;
     }
 
     public Intent classify(String message) {
@@ -33,7 +36,8 @@ public class IntentClassifier {
         ChatModel model = chatModelProvider.getIfAvailable();
         if (model != null) {
             try {
-                ClassificationResult parsed = parseModelOutput(model.call(renderPrompt(message)));
+                ClassificationResult parsed = parseModelOutput(
+                        modelCallExecutor.call(() -> model.call(renderPrompt(message))));
                 if (parsed != null && parsed.confidence() >= MODEL_CONFIDENCE_THRESHOLD) {
                     return parsed;
                 }

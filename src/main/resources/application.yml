@@ -6,6 +6,16 @@ spring:
     username: ${DB_USERNAME:microloan}
     password: ${DB_PASSWORD:microloan}
   ai:
+    retry:
+      # 模型读取仅有限重试；认证、参数等确定性 4xx 错误立即失败并进入规则降级。
+      max-attempts: ${AI_RETRY_MAX_ATTEMPTS:2}
+      on-client-errors: false
+      on-http-codes: 429
+      exclude-on-http-codes: 400,401,403,404,422
+      backoff:
+        initial-interval: ${AI_RETRY_INITIAL_INTERVAL:200ms}
+        multiplier: 2
+        max-interval: ${AI_RETRY_MAX_INTERVAL:1s}
     model:
       chat: ${AI_CHAT_MODEL:none}
       embedding: ${AI_EMBEDDING_MODEL:none}
@@ -32,6 +42,11 @@ knowledge:
     enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
     indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}
     model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+
+agent:
+  model-call:
+    # 覆盖 Spring AI 内部有限重试在内的整次分类调用预算。
+    timeout: ${AI_MODEL_CALL_TIMEOUT:3s}
 
 mybatis:
   configuration:

@@ -10,7 +10,7 @@ class IntentClassifierTest {
 
     private final IntentClassifier classifier = new IntentClassifier(
             new StaticListableBeanFactory().getBeanProvider(org.springframework.ai.chat.model.ChatModel.class),
-            new ObjectMapper());
+            new ObjectMapper(), new ModelCallExecutor(java.time.Duration.ofSeconds(3)));
 
     @Test
     void recognizesNextRepaymentQuestionWithoutAConfiguredModel() {
