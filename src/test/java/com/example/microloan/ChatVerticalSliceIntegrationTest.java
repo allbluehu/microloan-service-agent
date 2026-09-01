@@ -89,6 +89,23 @@ class ChatVerticalSliceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
+    void livenessProbeIsAvailableWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                // 即使匿名访问，探针也不暴露内部组件和基础设施细节。
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    void readinessProbeIncludesAvailableDatabaseWithoutExposingDetails() throws Exception {
+        mockMvc.perform(get("/actuator/health/readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
         String token = login("C10001");
 

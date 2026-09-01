@@ -63,6 +63,19 @@ security:
     step-up-ttl: 5m
 
 management:
+  endpoint:
+    health:
+      # 对外只返回聚合状态，避免数据库、磁盘等内部组件信息泄露。
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        # 存活探针不依赖外部资源，避免数据库短暂故障触发无效的进程重启。
+        liveness:
+          include: livenessState
+        # 就绪探针纳入数据库，故障实例会退出流量但保持进程供诊断与恢复。
+        readiness:
+          include: readinessState,db
   endpoints:
     web:
       exposure:

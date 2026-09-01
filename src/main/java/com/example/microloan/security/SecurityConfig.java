@@ -23,7 +23,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/login", "/actuator/health").permitAll()
+                        // 容器平台必须在没有客户 JWT 的情况下探测总健康、存活和就绪状态。
+                        .requestMatchers("/api/v1/auth/login", "/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
                     // Security rejects requests before MVC, so it must write the shared API error contract itself.
