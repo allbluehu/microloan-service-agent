@@ -36,6 +36,10 @@ public class ChatHistoryService {
         return List.copyOf(mapper.findRecentOwnedMessages(customerId, sessionId, limit));
     }
 
+    public List<ChatSessionView> findRecentSessions(Long customerId, int limit) {
+        return List.copyOf(mapper.findRecentOwnedSessions(customerId, limit));
+    }
+
     String sanitize(String content) {
         String redacted = SENSITIVE_DIGITS.matcher(content == null ? "" : content).replaceAll("[REDACTED]");
         return redacted.length() <= MAX_CONTENT_LENGTH ? redacted : redacted.substring(0, MAX_CONTENT_LENGTH);

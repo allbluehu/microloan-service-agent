@@ -45,6 +45,12 @@ public class ChatController {
         return chatHistoryService.findRecentMessages(principal.customerId(), sessionId, limit);
     }
 
+    @GetMapping
+    public List<ChatSessionView> sessions(@AuthenticationPrincipal CustomerPrincipal principal,
+                                          @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+        return chatHistoryService.findRecentSessions(principal.customerId(), limit);
+    }
+
     public record ChatRequest(
             /** 客户端生成的消息标识。 */
             @NotBlank String messageId,

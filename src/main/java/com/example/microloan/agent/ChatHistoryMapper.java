@@ -34,4 +34,16 @@ public interface ChatHistoryMapper {
     List<ChatMessageView> findRecentOwnedMessages(@Param("customerId") Long customerId,
                                                   @Param("sessionId") String sessionId,
                                                   @Param("limit") int limit);
+
+    @Select("""
+            SELECT s.session_id, s.created_at, s.updated_at, COUNT(m.id) AS message_count
+            FROM chat_session s
+            LEFT JOIN chat_message m ON m.session_id = s.id
+            WHERE s.customer_id = #{customerId}
+            GROUP BY s.id, s.session_id, s.created_at, s.updated_at
+            ORDER BY s.updated_at DESC, s.id DESC
+            LIMIT #{limit}
+            """)
+    List<ChatSessionView> findRecentOwnedSessions(@Param("customerId") Long customerId,
+                                                  @Param("limit") int limit);
 }

@@ -171,11 +171,23 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$[0].role").value("ASSISTANT"))
                 .andExpect(jsonPath("$[1].content").value("备注号码 [REDACTED]"));
 
+        mockMvc.perform(get("/api/v1/chat/sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .param("limit", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == 'S-HISTORY-1')].messageCount")
+                        .value(org.hamcrest.Matchers.contains(2)));
+
         String otherCustomerToken = login("C10002");
         mockMvc.perform(get("/api/v1/chat/sessions/S-HISTORY-1/messages")
                         .header("Authorization", "Bearer " + otherCustomerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get("/api/v1/chat/sessions")
+                        .header("Authorization", "Bearer " + otherCustomerToken)
+                        .param("limit", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sessionId == 'S-HISTORY-1')]").isEmpty());
     }
 
     @Test
