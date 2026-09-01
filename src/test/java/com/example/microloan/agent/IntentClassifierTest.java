@@ -49,4 +49,11 @@ class IntentClassifierTest {
         assertThat(classifier.classify("个体工商户经营贷需要什么材料？"))
                 .isEqualTo(Intent.KNOWLEDGE_QUERY);
     }
+
+    @Test
+    void loadsVersionedPromptFromClasspath() {
+        assertThat(IntentClassifier.PROMPT_VERSION).isEqualTo("intent-v1");
+        assertThat(classifier.renderPrompt("测试问题"))
+                .contains("只输出以下一个标签", "用户输入：测试问题");
+    }
 }

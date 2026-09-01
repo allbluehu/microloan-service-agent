@@ -54,6 +54,7 @@
 - [x] 建立 DRAFT → APPROVED → PUBLISHED → EXPIRED 受控状态机与发布审计（当前共 45 个测试）
 - [x] 使用 PDFBox 3.0.8 提取 PDF 文本，并校验扩展名、魔数、大小、页数、加密权限和空文本（当前共 50 个测试）
 - [x] 编写 10 份虚构产品与服务知识，并实现默认关闭、幂等且仅导入 DRAFT 的 classpath 加载器（当前共 52 个测试）
+- [x] 将意图分类提示词外置为版本化 classpath 资源，并让 Agent Trace 复用同一版本标识（当前共 54 个测试）
 
 ## 下一步
 
@@ -79,7 +80,7 @@
 - 意图分类的结构化输出 schema：JSON 结构、置信度字段、解析失败处理
 - 路由伪代码缺 unknown / 低置信度意图兜底分支
 - [x] `AgentState.toolResult` 已使用 sealed interface，具体业务 DTO 通过同包 wrapper 封装
-- prompt 版本的存储 / 外部化方案：`agent_trace` 有 `prompt_version` 字段但无管理载体（加表或明确文件方案）
+- [x] prompt 采用版本化 classpath 文件管理；`agent_trace.prompt_version` 直接引用分类器版本常量，避免双处配置漂移
 - `chat_session` / `chat_message` 表结构：ER 图有实体、`04` 核心表一节缺失
 - RAG 待定项：rerank 手段（cross-encoder vs LLM 重排）、语义切分参数（chunk size / overlap）；Embedding 已确定为 text-embedding-3-small 的 1024 维输出
 - 重试 / 超时参数量化：重试次数、退避策略、可重试错误类别（429 / 5xx / 超时）

@@ -1,25 +1,19 @@
 package com.example.microloan.agent;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 @Component
 public class IntentClassifier {
 
-    private static final String PROMPT = """
-            你是小额贷客服意图分类器。只输出以下一个标签：
-            NEXT_REPAYMENT_QUERY、APPLICATION_STATUS_QUERY、PAYMENT_RECORDS_QUERY、EARLY_SETTLEMENT_QUOTE、
-            HUMAN_HANDOFF、KNOWLEDGE_QUERY、UNKNOWN。
-            NEXT_REPAYMENT_QUERY 表示用户在询问下一期、下个月或近期应还金额/日期。
-            APPLICATION_STATUS_QUERY 表示用户在询问贷款申请的进度、状态或缺失资料。
-            PAYMENT_RECORDS_QUERY 表示用户在询问过去的还款记录、支付记录或某次还款是否成功。
-            EARLY_SETTLEMENT_QUOTE 表示用户希望试算提前还清或提前结清贷款的金额。
-            HUMAN_HANDOFF 表示用户明确要求人工客服或转人工。
-            KNOWLEDGE_QUERY 表示用户咨询产品条件、材料、期限、利率、费用或办理流程。
-            用户输入：%s
-            """;
+    public static final String PROMPT_VERSION = "intent-v1";
+    private static final String PROMPT_RESOURCE = "prompts/intent-classifier-v1.txt";
+    private static final String PROMPT = loadPrompt();
 
     private final ObjectProvider<ChatModel> chatModelProvider;
 
@@ -31,7 +25,7 @@ public class IntentClassifier {
         ChatModel model = chatModelProvider.getIfAvailable();
         if (model != null) {
             try {
-                String output = model.call(PROMPT.formatted(message)).trim().toUpperCase(Locale.ROOT);
+                String output = model.call(renderPrompt(message)).trim().toUpperCase(Locale.ROOT);
                 // Match the more specific known labels instead of accepting arbitrary model prose as routing data.
                 if (output.contains("APPLICATION_STATUS_QUERY")) {
                     return Intent.APPLICATION_STATUS_QUERY;
@@ -54,6 +48,19 @@ public class IntentClassifier {
             }
         }
         return ruleFallback(message);
+    }
+
+    String renderPrompt(String message) {
+        return PROMPT.formatted(message);
+    }
+
+    private static String loadPrompt() {
+        try {
+            return new ClassPathResource(PROMPT_RESOURCE).getContentAsString(StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            // 提示词属于受版本控制的必备运行资源，缺失时应在启动阶段暴露部署错误。
+            throw new IllegalStateException("Missing intent prompt resource: " + PROMPT_RESOURCE, exception);
+        }
     }
 
     private Intent ruleFallback(String message) {
