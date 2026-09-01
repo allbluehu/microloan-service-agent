@@ -35,12 +35,14 @@ public class AgentOrchestrator {
     private final AgentTraceService traceService;
     private final KnowledgeService knowledgeService;
     private final ChatHistoryService chatHistoryService;
+    private final CompositeIntentDetector compositeIntentDetector;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
                              ApplicationTools applicationTools, PaymentTools paymentTools,
                              SettlementTools settlementTools, RiskClassifier riskClassifier,
                              TicketTools ticketTools, AgentTraceService traceService,
-                             KnowledgeService knowledgeService, ChatHistoryService chatHistoryService) {
+                             KnowledgeService knowledgeService, ChatHistoryService chatHistoryService,
+                             CompositeIntentDetector compositeIntentDetector) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
@@ -51,6 +53,7 @@ public class AgentOrchestrator {
         this.traceService = traceService;
         this.knowledgeService = knowledgeService;
         this.chatHistoryService = chatHistoryService;
+        this.compositeIntentDetector = compositeIntentDetector;
     }
 
     @Transactional
@@ -90,6 +93,8 @@ public class AgentOrchestrator {
             case HIGH_RISK_COMPLAINT -> handoffHighRisk(routedState);
             case HUMAN_HANDOFF -> handoffRequested(routedState);
             case KNOWLEDGE_QUERY -> answerKnowledge(routedState);
+            case CLARIFICATION_REQUIRED -> routedState.complete(
+                    "你这一条消息包含多个业务请求。请先选择一个：查询账单、申请进度、还款记录、提前结清试算或产品咨询。");
             case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         });
         chatHistoryService.recordAssistantMessage(sessionContext.id(), messageId, completed);
@@ -113,6 +118,12 @@ public class AgentOrchestrator {
     private AgentState traceIntent(TraceContext trace, AgentState state) {
         long started = System.nanoTime();
         try {
+            if (compositeIntentDetector.requiresClarification(state.content())) {
+                AgentState result = state.withIntent(Intent.CLARIFICATION_REQUIRED);
+                traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
+                        "intent=" + result.intent() + ",confidence=1.0,source=COMPOSITE_RULE", elapsedMs(started));
+                return result;
+            }
             IntentClassifier.ClassificationResult classification = intentClassifier.classifyDetailed(state.content());
             AgentState result = state.withIntent(classification.intent());
             traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),

@@ -251,6 +251,34 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void compositeBusinessRequestClarifiesWithoutCallingATool() throws Exception {
+        String token = login("C10001");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/chat/sessions/S-COMPOSITE-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M-COMPOSITE-1",
+                                  "content": "查一下下一期账单，顺便看看还款记录",
+                                  "selectedLoanId": "L10001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("CLARIFICATION_REQUIRED"))
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andReturn();
+
+        String traceId = objectMapper.readTree(result.getResponse().getContentAsString()).path("traceId").asText();
+        mockMvc.perform(get("/api/v1/agent/traces/{traceId}", traceId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[1].outputSummary")
+                        .value(org.hamcrest.Matchers.containsString("source=COMPOSITE_RULE")))
+                .andExpect(jsonPath("$[3].outputSummary").value("resultType=NONE"));
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersLoanThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 

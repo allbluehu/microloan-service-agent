@@ -15,6 +15,8 @@ public enum Intent {
     HUMAN_HANDOFF,
     /** 查询公开产品或流程知识。 */
     KNOWLEDGE_QUERY,
+    /** 同一轮包含多个业务动作，需要用户明确优先目标。 */
+    CLARIFICATION_REQUIRED,
     /** 无法可靠归类的意图。 */
     UNKNOWN
 }
