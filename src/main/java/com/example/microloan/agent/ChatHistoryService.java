@@ -1,5 +1,6 @@
 package com.example.microloan.agent;
 
+import java.util.List;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,10 @@ public class ChatHistoryService {
         mapper.insertMessage(sessionDbId, messageId + ":assistant", "ASSISTANT", sanitize(state.finalAnswer()),
                 state.intent().name(), state.traceId());
         mapper.touchSession(sessionDbId);
+    }
+
+    public List<ChatMessageView> findRecentMessages(Long customerId, String sessionId, int limit) {
+        return List.copyOf(mapper.findRecentOwnedMessages(customerId, sessionId, limit));
     }
 
     String sanitize(String content) {

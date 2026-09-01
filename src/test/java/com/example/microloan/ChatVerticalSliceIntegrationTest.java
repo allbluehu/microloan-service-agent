@@ -162,6 +162,20 @@ class ChatVerticalSliceIntegrationTest {
         assertThat(contents).hasSize(2);
         assertThat(contents.getFirst()).isEqualTo("备注号码 [REDACTED]");
         assertThat(tracedAnswers).isEqualTo(1);
+
+        mockMvc.perform(get("/api/v1/chat/sessions/S-HISTORY-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].role").value("ASSISTANT"))
+                .andExpect(jsonPath("$[1].content").value("备注号码 [REDACTED]"));
+
+        String otherCustomerToken = login("C10002");
+        mockMvc.perform(get("/api/v1/chat/sessions/S-HISTORY-1/messages")
+                        .header("Authorization", "Bearer " + otherCustomerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

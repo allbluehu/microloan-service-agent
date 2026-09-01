@@ -1,5 +1,6 @@
 package com.example.microloan.agent;
 
+import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -21,4 +22,16 @@ public interface ChatHistoryMapper {
 
     @Update("UPDATE chat_session SET updated_at = CURRENT_TIMESTAMP WHERE id = #{sessionDbId}")
     void touchSession(@Param("sessionDbId") Long sessionDbId);
+
+    @Select("""
+            SELECT m.message_id, m.role, m.content, m.intent, m.trace_id, m.created_at
+            FROM chat_message m
+            JOIN chat_session s ON s.id = m.session_id
+            WHERE s.session_id = #{sessionId} AND s.customer_id = #{customerId}
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT #{limit}
+            """)
+    List<ChatMessageView> findRecentOwnedMessages(@Param("customerId") Long customerId,
+                                                  @Param("sessionId") String sessionId,
+                                                  @Param("limit") int limit);
 }
