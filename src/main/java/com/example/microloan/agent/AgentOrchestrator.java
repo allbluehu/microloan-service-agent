@@ -59,10 +59,13 @@ public class AgentOrchestrator {
                              LocalDate settlementDate) {
         String traceId = UUID.randomUUID().toString();
         CustomerPrincipal principal = authenticatedPrincipal();
-        Long sessionDbId = chatHistoryService.recordUserMessage(principal.customerId(), sessionId, messageId, content);
+        ChatSessionContext sessionContext = chatHistoryService.recordUserMessage(
+                principal.customerId(), sessionId, messageId, content, selectedLoanId, selectedApplicationId,
+                selectedProductCode, selectedRegion);
         TraceContext trace = traceService.start(traceId, sessionId, principal.customerId());
         AgentState state = new AgentState(traceId, sessionId, messageId, content,
-                selectedLoanId, selectedApplicationId, selectedProductCode, selectedRegion, settlementDate,
+                sessionContext.selectedLoanId(), sessionContext.selectedApplicationId(),
+                sessionContext.selectedProductCode(), sessionContext.selectedRegion(), settlementDate,
                 RiskLevel.LOW, null,
                 Intent.UNKNOWN, null, null);
         state = traceRisk(trace, state);
@@ -71,7 +74,7 @@ public class AgentOrchestrator {
             AgentState highRiskState = state.withIntent(Intent.HIGH_RISK_COMPLAINT);
             traceRoute(trace, highRiskState);
             AgentState completed = traceExecution(trace, highRiskState, () -> handoffHighRisk(highRiskState));
-            chatHistoryService.recordAssistantMessage(sessionDbId, messageId, completed);
+            chatHistoryService.recordAssistantMessage(sessionContext.id(), messageId, completed);
             return completed;
         }
         state = traceIntent(trace, state);
@@ -89,7 +92,7 @@ public class AgentOrchestrator {
             case KNOWLEDGE_QUERY -> answerKnowledge(routedState);
             case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         });
-        chatHistoryService.recordAssistantMessage(sessionDbId, messageId, completed);
+        chatHistoryService.recordAssistantMessage(sessionContext.id(), messageId, completed);
         return completed;
     }
 

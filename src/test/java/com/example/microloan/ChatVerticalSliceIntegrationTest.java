@@ -191,6 +191,35 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void conversationReusesOnlyPreviouslySelectedResourceIdentifier() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CONTEXT-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M-CONTEXT-1",
+                                  "content": "我下个月要还多少钱？",
+                                  "selectedLoanId": "L10001"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CONTEXT-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M-CONTEXT-2",
+                                  "content": "下一期账单是多少？"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("NEXT_REPAYMENT_QUERY"))
+                .andExpect(jsonPath("$.businessCard.loanId").value("L10001"));
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersLoanThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 

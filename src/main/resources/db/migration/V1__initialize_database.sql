@@ -135,6 +135,10 @@ CREATE TABLE chat_session (
     id BIGSERIAL PRIMARY KEY,                              -- 对话会话数据库主键
     session_id VARCHAR(64) NOT NULL UNIQUE,               -- 客户端使用的唯一会话标识
     customer_id BIGINT NOT NULL REFERENCES customer(id), -- 会话所属客户主键
+    selected_loan_id VARCHAR(32),                         -- 最近一次明确选择的贷款编号
+    selected_application_id VARCHAR(32),                  -- 最近一次明确选择的贷款申请编号
+    selected_product_code VARCHAR(50),                    -- 最近一次明确选择的产品编码
+    selected_region VARCHAR(50),                          -- 最近一次明确选择的地区编码
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 会话创建时间
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP  -- 会话最近消息时间
 );
@@ -338,6 +342,10 @@ COMMENT ON TABLE chat_session IS '按客户隔离的客服对话会话';
 COMMENT ON COLUMN chat_session.id IS '对话会话数据库主键';
 COMMENT ON COLUMN chat_session.session_id IS '客户端使用的唯一会话标识';
 COMMENT ON COLUMN chat_session.customer_id IS '会话所属客户主键';
+COMMENT ON COLUMN chat_session.selected_loan_id IS '最近一次明确选择的贷款编号，仅作为短期会话槽位';
+COMMENT ON COLUMN chat_session.selected_application_id IS '最近一次明确选择的贷款申请编号，仅作为短期会话槽位';
+COMMENT ON COLUMN chat_session.selected_product_code IS '最近一次明确选择的产品编码，仅作为短期会话槽位';
+COMMENT ON COLUMN chat_session.selected_region IS '最近一次明确选择的地区编码，仅作为短期会话槽位';
 COMMENT ON COLUMN chat_session.created_at IS '会话创建时间';
 COMMENT ON COLUMN chat_session.updated_at IS '会话最近消息时间';
 

@@ -12,8 +12,28 @@ public interface ChatHistoryMapper {
     @Insert("INSERT INTO chat_session (session_id, customer_id) VALUES (#{sessionId}, #{customerId}) ON CONFLICT (session_id) DO NOTHING")
     int createSessionIfAbsent(@Param("sessionId") String sessionId, @Param("customerId") Long customerId);
 
-    @Select("SELECT id FROM chat_session WHERE session_id = #{sessionId} AND customer_id = #{customerId}")
-    Long findOwnedSessionId(@Param("sessionId") String sessionId, @Param("customerId") Long customerId);
+    @Select("""
+            SELECT id, selected_loan_id, selected_application_id, selected_product_code, selected_region
+            FROM chat_session
+            WHERE session_id = #{sessionId} AND customer_id = #{customerId}
+            """)
+    ChatSessionContext findOwnedSessionContext(@Param("sessionId") String sessionId,
+                                               @Param("customerId") Long customerId);
+
+    @Update("""
+            UPDATE chat_session
+            SET selected_loan_id = COALESCE(#{selectedLoanId}, selected_loan_id),
+                selected_application_id = COALESCE(#{selectedApplicationId}, selected_application_id),
+                selected_product_code = COALESCE(#{selectedProductCode}, selected_product_code),
+                selected_region = COALESCE(#{selectedRegion}, selected_region),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{sessionDbId}
+            """)
+    void updateContext(@Param("sessionDbId") Long sessionDbId,
+                       @Param("selectedLoanId") String selectedLoanId,
+                       @Param("selectedApplicationId") String selectedApplicationId,
+                       @Param("selectedProductCode") String selectedProductCode,
+                       @Param("selectedRegion") String selectedRegion);
 
     @Insert("INSERT INTO chat_message (session_id, message_id, role, content, intent, trace_id) VALUES (#{sessionDbId}, #{messageId}, #{role}, #{content}, #{intent}, #{traceId})")
     void insertMessage(@Param("sessionDbId") Long sessionDbId, @Param("messageId") String messageId,

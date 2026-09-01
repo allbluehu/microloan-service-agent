@@ -14,16 +14,20 @@ public class ChatHistoryService {
         this.mapper = mapper;
     }
 
-    public Long recordUserMessage(Long customerId, String sessionId, String messageId, String content) {
+    public ChatSessionContext recordUserMessage(Long customerId, String sessionId, String messageId, String content,
+                                                String selectedLoanId, String selectedApplicationId,
+                                                String selectedProductCode, String selectedRegion) {
         mapper.createSessionIfAbsent(sessionId, customerId);
-        Long sessionDbId = mapper.findOwnedSessionId(sessionId, customerId);
-        if (sessionDbId == null) {
+        ChatSessionContext context = mapper.findOwnedSessionContext(sessionId, customerId);
+        if (context == null) {
             // 会话标识已属于其他客户时拒绝复用，避免跨客户消息混入同一上下文。
             throw new IllegalArgumentException("Chat session is not owned by current customer");
         }
-        mapper.insertMessage(sessionDbId, messageId, "USER", sanitize(content), null, null);
-        mapper.touchSession(sessionDbId);
-        return sessionDbId;
+        mapper.updateContext(context.id(), blankToNull(selectedLoanId), blankToNull(selectedApplicationId),
+                blankToNull(selectedProductCode), blankToNull(selectedRegion));
+        ChatSessionContext updated = mapper.findOwnedSessionContext(sessionId, customerId);
+        mapper.insertMessage(updated.id(), messageId, "USER", sanitize(content), null, null);
+        return updated;
     }
 
     public void recordAssistantMessage(Long sessionDbId, String messageId, AgentState state) {
@@ -43,5 +47,9 @@ public class ChatHistoryService {
     String sanitize(String content) {
         String redacted = SENSITIVE_DIGITS.matcher(content == null ? "" : content).replaceAll("[REDACTED]");
         return redacted.length() <= MAX_CONTENT_LENGTH ? redacted : redacted.substring(0, MAX_CONTENT_LENGTH);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }
