@@ -12,7 +12,7 @@ mvn test
 
 测试通过 Testcontainers 自动启动 PostgreSQL，并执行 Flyway 迁移。首次运行需要拉取 `pgvector/pgvector:pg16` 和 Testcontainers Ryuk 镜像。
 测试套件包含 50 条确定性 RAG 基线，用于约束证据召回、跨产品隔离和无答案拒答。
-知识入库支持带元数据头的 Markdown 解析、SHA-256 校验和、按标题和段落边界切分、带重复版本保护的事务化导入，以及 `DRAFT → APPROVED → PUBLISHED → EXPIRED` 受控发布；PDF 解析仍在迭代中。
+知识入库支持 Markdown 与文本型 PDF、SHA-256 校验和、语义切分、带重复版本保护的事务化导入，以及 `DRAFT → APPROVED → PUBLISHED → EXPIRED` 受控发布。PDF 导入校验文件签名、大小、页数、加密权限和提取结果；纯扫描件暂不支持 OCR。
 
 ## 本地启动
 

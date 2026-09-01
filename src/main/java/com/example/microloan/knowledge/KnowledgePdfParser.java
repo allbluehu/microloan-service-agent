@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +56,8 @@ public class KnowledgePdfParser {
                     metadata.version(), metadata.audience().toUpperCase(Locale.ROOT), metadata.effectiveFrom(),
                     metadata.effectiveTo(), metadata.reviewer(), List.copyOf(metadata.keywords()), text,
                     KnowledgeChecksum.sha256(content));
+        } catch (InvalidPasswordException exception) {
+            throw new IllegalArgumentException("不允许导入加密 PDF", exception);
         } catch (IOException exception) {
             throw new IllegalArgumentException("PDF 文件损坏或格式不受支持", exception);
         }
