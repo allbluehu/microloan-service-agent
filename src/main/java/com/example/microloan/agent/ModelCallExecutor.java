@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -20,19 +21,25 @@ public class ModelCallExecutor {
     private final Duration timeout;
     private final ModelCircuitBreaker circuitBreaker;
     private final MeterRegistry meterRegistry;
+    private final Semaphore capacity;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     @Autowired
     public ModelCallExecutor(@Value("${agent.model-call.timeout:3s}") Duration timeout,
+                             @Value("${agent.model-call.max-concurrent:20}") int maxConcurrent,
                              ModelCircuitBreaker circuitBreaker,
                              MeterRegistry meterRegistry) {
+        if (maxConcurrent < 1) {
+            throw new IllegalArgumentException("Model max concurrency must be positive");
+        }
         this.timeout = timeout;
         this.circuitBreaker = circuitBreaker;
         this.meterRegistry = meterRegistry;
+        this.capacity = new Semaphore(maxConcurrent);
     }
 
     ModelCallExecutor(Duration timeout) {
-        this(timeout,
+        this(timeout, 20,
                 new ModelCircuitBreaker(3, Duration.ofSeconds(30), System::nanoTime),
                 new SimpleMeterRegistry());
     }
@@ -40,7 +47,14 @@ public class ModelCallExecutor {
     public String call(Supplier<String> invocation) {
         long startedAt = System.nanoTime();
         String outcome = "failure";
+        boolean capacityAcquired = false;
         try {
+            // 容量耗尽时立即降级，避免请求在线程或模型连接前无限排队并放大尾延迟。
+            if (!capacity.tryAcquire()) {
+                outcome = "capacity_rejected";
+                throw new ModelCapacityExceededException();
+            }
+            capacityAcquired = true;
             if (!circuitBreaker.tryAcquirePermission()) {
                 outcome = "circuit_open";
                 throw new ModelCircuitOpenException();
@@ -70,6 +84,9 @@ public class ModelCallExecutor {
                 throw new IllegalStateException("Model invocation failed", exception.getCause());
             }
         } finally {
+            if (capacityAcquired) {
+                capacity.release();
+            }
             // 指标仅使用固定结果标签，避免客户或提示词进入监控系统造成泄露和基数膨胀。
             meterRegistry.counter("microloan.agent.model.calls", "outcome", outcome).increment();
             meterRegistry.timer("microloan.agent.model.call.duration")
@@ -91,6 +108,12 @@ public class ModelCallExecutor {
     private static final class ModelCircuitOpenException extends RuntimeException {
         private ModelCircuitOpenException() {
             super("Model circuit breaker is open");
+        }
+    }
+
+    private static final class ModelCapacityExceededException extends RuntimeException {
+        private ModelCapacityExceededException() {
+            super("Model call capacity is exhausted");
         }
     }
 }

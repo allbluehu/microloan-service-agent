@@ -47,6 +47,8 @@ agent:
   model-call:
     # 覆盖 Spring AI 内部有限重试在内的整次分类调用预算。
     timeout: ${AI_MODEL_CALL_TIMEOUT:3s}
+    # 限制单实例同时进行的模型调用，容量耗尽时立即进入规则降级而非继续排队。
+    max-concurrent: ${AI_MODEL_MAX_CONCURRENT:20}
     circuit-breaker:
       failure-threshold: ${AI_CIRCUIT_FAILURE_THRESHOLD:3}
       open-duration: ${AI_CIRCUIT_OPEN_DURATION:30s}
