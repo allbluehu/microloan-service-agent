@@ -32,6 +32,7 @@ public class ChatController {
 
     @PostMapping("/{sessionId}/messages")
     public ChatResponse send(@PathVariable String sessionId, @Valid @RequestBody ChatRequest request) {
+        // Controller 只负责协议转换；认证上下文、会话归属和业务路由统一由编排链处理。
         AgentState state = orchestrator.handle(sessionId, request.messageId(), request.content(),
                 request.selectedLoanId(), request.selectedApplicationId(), request.selectedProductCode(),
                 request.selectedRegion(), request.settlementDate());

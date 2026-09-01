@@ -22,6 +22,7 @@ public class ApplicationTools {
         if (!(principal instanceof CustomerPrincipal customer)) {
             throw new IllegalStateException("Authenticated customer context is required");
         }
+        // 业务服务同时使用登录客户与申请编号校验资源归属，不能只按申请编号查询。
         return applicationService.getStatus(customer.customerId(), applicationId);
     }
 }

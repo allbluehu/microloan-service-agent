@@ -22,6 +22,7 @@ public class PaymentTools {
         if (!(principal instanceof CustomerPrincipal customer)) {
             throw new IllegalStateException("Authenticated customer context is required");
         }
+        // 固定最多返回 20 条，限制对话工具的查询与响应体规模。
         return paymentService.getPaymentRecords(customer.customerId(), loanId, null, null, 20);
     }
 }

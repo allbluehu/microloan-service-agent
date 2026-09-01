@@ -22,7 +22,7 @@ public class RepaymentTools {
         if (!(principal instanceof CustomerPrincipal customer)) {
             throw new IllegalStateException("Authenticated customer context is required");
         }
-        // Identity is deliberately sourced from SecurityContext, never from model-controlled arguments.
+        // 客户身份只取自 SecurityContext，绝不接受模型可控参数，防止横向越权查询。
         return repaymentService.getNextRepaymentPlan(customer.customerId(), loanId);
     }
 }

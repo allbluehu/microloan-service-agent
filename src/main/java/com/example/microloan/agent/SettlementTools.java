@@ -23,6 +23,7 @@ public class SettlementTools {
         if (!(principal instanceof CustomerPrincipal customer)) {
             throw new IllegalStateException("Authenticated customer context is required");
         }
+        // 二次认证等级来自签名令牌中的主体，工具只做试算且不触发真实扣款。
         return settlementService.calculate(customer.customerId(), customer.authLevel(), loanId, settlementDate);
     }
 }

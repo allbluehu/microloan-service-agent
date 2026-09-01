@@ -56,16 +56,23 @@ public class AgentOrchestrator {
         this.compositeIntentDetector = compositeIntentDetector;
     }
 
+    /**
+     * 执行一轮完整对话：固化会话上下文，依次完成风险识别、意图识别、受控路由和结果持久化。
+     * 高风险规则优先于模型意图；模型仅能返回协议内意图，不能直接选择或传入任意业务方法。
+     */
     @Transactional
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
                              String selectedApplicationId, String selectedProductCode, String selectedRegion,
                              LocalDate settlementDate) {
         String traceId = UUID.randomUUID().toString();
+        // 客户身份只取自服务端安全上下文，禁止使用请求或模型生成的客户标识。
         CustomerPrincipal principal = authenticatedPrincipal();
+        // 先校验会话归属并合并本轮显式选择，使后续节点使用同一份已持久化上下文快照。
         ChatSessionContext sessionContext = chatHistoryService.recordUserMessage(
                 principal.customerId(), sessionId, messageId, content, selectedLoanId, selectedApplicationId,
                 selectedProductCode, selectedRegion);
         TraceContext trace = traceService.start(traceId, sessionId, principal.customerId());
+        // AgentState 是不可变的节点载体，避免不同分支原地修改状态导致 Trace 与最终结果不一致。
         AgentState state = new AgentState(traceId, sessionId, messageId, content,
                 sessionContext.selectedLoanId(), sessionContext.selectedApplicationId(),
                 sessionContext.selectedProductCode(), sessionContext.selectedRegion(), settlementDate,
@@ -80,11 +87,12 @@ public class AgentOrchestrator {
             chatHistoryService.recordAssistantMessage(sessionContext.id(), messageId, completed);
             return completed;
         }
+        // 只有低风险消息进入普通意图链；复合意图规则会在模型分类前要求客户澄清。
         state = traceIntent(trace, state);
         traceRoute(trace, state);
         AgentState routedState = state;
 
-        // The switch is the deterministic routing boundary; the model cannot select arbitrary application code.
+        // switch 是确定性路由边界：模型输出只能映射到以下白名单分支，不能执行任意应用代码。
         AgentState completed = traceExecution(trace, routedState, () -> switch (routedState.intent()) {
             case NEXT_REPAYMENT_QUERY -> queryNextRepayment(routedState);
             case APPLICATION_STATUS_QUERY -> queryApplicationStatus(routedState);
@@ -97,6 +105,7 @@ public class AgentOrchestrator {
                     "你这一条消息包含多个业务请求。请先选择一个：查询账单、申请进度、还款记录、提前结清试算或产品咨询。");
             case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         });
+        // 助手消息与本轮业务执行处于同一事务；失败时不留下只有半边的对话记录。
         chatHistoryService.recordAssistantMessage(sessionContext.id(), messageId, completed);
         return completed;
     }
@@ -118,6 +127,7 @@ public class AgentOrchestrator {
     private AgentState traceIntent(TraceContext trace, AgentState state) {
         long started = System.nanoTime();
         try {
+            // 多个普通业务动作不猜测执行顺序，避免一次消息触发客户未确认的组合操作。
             if (compositeIntentDetector.requiresClarification(state.content())) {
                 AgentState result = state.withIntent(Intent.CLARIFICATION_REQUIRED);
                 traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
@@ -143,6 +153,7 @@ public class AgentOrchestrator {
     }
 
     private AgentState traceExecution(TraceContext trace, AgentState state, Supplier<AgentState> execution) {
+        // 知识检索与业务工具使用不同节点名，便于分别统计召回质量和工具可靠性。
         String nodeName = state.intent() == Intent.KNOWLEDGE_QUERY ? "KNOWLEDGE_RETRIEVER" : "TOOL_EXECUTOR";
         long started = System.nanoTime();
         try {
@@ -157,7 +168,7 @@ public class AgentOrchestrator {
             if (isExpectedBusinessRejection(exception)) {
                 throw exception;
             }
-            // Unknown infrastructure/tool failures become one safe response without leaking implementation details.
+            // 未知基础设施或工具故障统一转换，避免将内部异常细节暴露给客户。
             throw new ToolUnavailableException(exception);
         }
     }
@@ -183,10 +194,11 @@ public class AgentOrchestrator {
 
     private AgentState queryNextRepayment(AgentState state) {
         if (isBlank(state.selectedLoanId())) {
+            // 缺少资源标识时只澄清，不让模型猜测客户要查询哪一笔贷款。
             return state.complete("请先选择需要查询的贷款。");
         }
         NextRepaymentPlan plan = repaymentTools.getNextRepaymentPlan(state.selectedLoanId());
-        // Financial values use a fixed template so the model cannot alter authoritative tool results.
+        // 金融数值使用固定模板呈现，避免模型改写权威工具返回的金额和日期。
         String answer = "贷款%s下一期应还%s元，还款日为%s（本金%s元、利息%s元、费用%s元）。"
                 .formatted(plan.loanId(), plan.totalAmount().toPlainString(), plan.dueDate(),
                         plan.principal().toPlainString(), plan.interest().toPlainString(), plan.fee().toPlainString());
@@ -251,6 +263,7 @@ public class AgentOrchestrator {
         KnowledgeAnswer answer = knowledgeService.answer(
                 state.content(), state.selectedProductCode(), state.selectedRegion());
         if (answer.sources().isEmpty()) {
+            // 无可靠来源时仅返回知识服务的拒答文本，不构造看似有依据的业务卡片。
             return state.complete(answer.answer());
         }
         return state.complete(new ToolResult.Knowledge(answer), answer.answer());
