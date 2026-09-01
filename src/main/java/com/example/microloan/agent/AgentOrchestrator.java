@@ -4,6 +4,8 @@ import com.example.microloan.agent.trace.AgentTraceService;
 import com.example.microloan.agent.trace.AgentTraceService.TraceContext;
 import com.example.microloan.application.ApplicationStatus;
 import com.example.microloan.application.ApplicationAccessDeniedException;
+import com.example.microloan.knowledge.KnowledgeAnswer;
+import com.example.microloan.knowledge.KnowledgeService;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import com.example.microloan.repayment.LoanAccessDeniedException;
@@ -30,11 +32,13 @@ public class AgentOrchestrator {
     private final RiskClassifier riskClassifier;
     private final TicketTools ticketTools;
     private final AgentTraceService traceService;
+    private final KnowledgeService knowledgeService;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
                              ApplicationTools applicationTools, PaymentTools paymentTools,
                              SettlementTools settlementTools, RiskClassifier riskClassifier,
-                             TicketTools ticketTools, AgentTraceService traceService) {
+                             TicketTools ticketTools, AgentTraceService traceService,
+                             KnowledgeService knowledgeService) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
@@ -43,15 +47,18 @@ public class AgentOrchestrator {
         this.riskClassifier = riskClassifier;
         this.ticketTools = ticketTools;
         this.traceService = traceService;
+        this.knowledgeService = knowledgeService;
     }
 
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
-                             String selectedApplicationId, LocalDate settlementDate) {
+                             String selectedApplicationId, String selectedProductCode, String selectedRegion,
+                             LocalDate settlementDate) {
         String traceId = UUID.randomUUID().toString();
         CustomerPrincipal principal = authenticatedPrincipal();
         TraceContext trace = traceService.start(traceId, sessionId, principal.customerId());
         AgentState state = new AgentState(traceId, sessionId, messageId, content,
-                selectedLoanId, selectedApplicationId, settlementDate, RiskLevel.LOW, null,
+                selectedLoanId, selectedApplicationId, selectedProductCode, selectedRegion, settlementDate,
+                RiskLevel.LOW, null,
                 Intent.UNKNOWN, null, null);
         state = traceRisk(trace, state);
         if (state.riskLevel() == RiskLevel.HIGH) {
@@ -71,6 +78,7 @@ public class AgentOrchestrator {
             case EARLY_SETTLEMENT_QUOTE -> calculateEarlySettlement(routedState);
             case HIGH_RISK_COMPLAINT -> handoffHighRisk(routedState);
             case HUMAN_HANDOFF -> handoffRequested(routedState);
+            case KNOWLEDGE_QUERY -> answerKnowledge(routedState);
             case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         });
     }
@@ -109,15 +117,16 @@ public class AgentOrchestrator {
     }
 
     private AgentState traceExecution(TraceContext trace, AgentState state, Supplier<AgentState> execution) {
+        String nodeName = state.intent() == Intent.KNOWLEDGE_QUERY ? "KNOWLEDGE_RETRIEVER" : "TOOL_EXECUTOR";
         long started = System.nanoTime();
         try {
             AgentState result = execution.get();
             String resultType = result.toolResult() == null ? "NONE" : result.toolResult().getClass().getSimpleName();
-            traceService.success(trace, "TOOL_EXECUTOR", "intent=" + state.intent(),
+            traceService.success(trace, nodeName, "intent=" + state.intent(),
                     "resultType=" + resultType, elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
-            traceService.failed(trace, "TOOL_EXECUTOR", "intent=" + state.intent(), exception,
+            traceService.failed(trace, nodeName, "intent=" + state.intent(), exception,
                     elapsedMs(started));
             if (isExpectedBusinessRejection(exception)) {
                 throw exception;
@@ -210,6 +219,15 @@ public class AgentOrchestrator {
                 state.selectedLoanId(), state.content(), TicketPriority.NORMAL);
         return state.complete(new ToolResult.Ticket(ticket), "已创建工单%s，正在为你转接人工客服。"
                 .formatted(ticket.ticketId()));
+    }
+
+    private AgentState answerKnowledge(AgentState state) {
+        KnowledgeAnswer answer = knowledgeService.answer(
+                state.content(), state.selectedProductCode(), state.selectedRegion());
+        if (answer.sources().isEmpty()) {
+            return state.complete(answer.answer());
+        }
+        return state.complete(new ToolResult.Knowledge(answer), answer.answer());
     }
 
     private boolean isBlank(String value) {

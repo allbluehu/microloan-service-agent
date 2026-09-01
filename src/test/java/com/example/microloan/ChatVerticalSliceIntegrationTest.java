@@ -229,6 +229,69 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void knowledgeAnswerUsesOnlyPublishedEffectiveProductEvidence() throws Exception {
+        String token = login("C10001");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/chat/sessions/S-KNOWLEDGE/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId":"M-K1",
+                                  "content":"个体工商户经营贷需要什么材料？"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("KNOWLEDGE_QUERY"))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("营业执照")))
+                .andExpect(jsonPath("$.businessCard.sources[0].documentId").value("KD-MB-001"))
+                .andExpect(jsonPath("$.businessCard.sources[0].chunkId").value("KC-MB-001"))
+                .andExpect(jsonPath("$.businessCard.sources[0].version").value("2026.1"))
+                .andReturn();
+
+        String response = result.getResponse().getContentAsString();
+        assertThat(response).doesNotContain("旧版经营贷只需要", "内部反欺诈审核阈值", "个人消费贷");
+    }
+
+    @Test
+    void knowledgeMissRefusesToInventAnAnswer() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-KNOWLEDGE/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId":"M-K2",
+                                  "content":"经营贷费用是多少？"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("KNOWLEDGE_QUERY"))
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andExpect(jsonPath("$.answer").value("未找到当前有效且可对客展示的知识，请补充产品名称或转人工客服。"));
+    }
+
+    @Test
+    void explicitProductFilterPreventsCrossProductEvidence() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-KNOWLEDGE/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId":"M-K3",
+                                  "content":"经营贷需要什么材料？",
+                                  "selectedProductCode":"PERSONAL_CONSUMER"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("未找到")));
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersApplicationThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 

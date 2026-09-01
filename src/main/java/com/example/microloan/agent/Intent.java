@@ -7,5 +7,6 @@ public enum Intent {
     EARLY_SETTLEMENT_QUOTE,
     HIGH_RISK_COMPLAINT,
     HUMAN_HANDOFF,
+    KNOWLEDGE_QUERY,
     UNKNOWN
 }

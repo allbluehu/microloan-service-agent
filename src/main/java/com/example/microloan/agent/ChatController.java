@@ -22,12 +22,14 @@ public class ChatController {
     @PostMapping("/{sessionId}/messages")
     public ChatResponse send(@PathVariable String sessionId, @Valid @RequestBody ChatRequest request) {
         AgentState state = orchestrator.handle(sessionId, request.messageId(), request.content(),
-                request.selectedLoanId(), request.selectedApplicationId(), request.settlementDate());
+                request.selectedLoanId(), request.selectedApplicationId(), request.selectedProductCode(),
+                request.selectedRegion(), request.settlementDate());
         return new ChatResponse(state.traceId(), state.intent(), state.finalAnswer(), state.toolResult());
     }
 
     public record ChatRequest(@NotBlank String messageId, @NotBlank String content, String selectedLoanId,
-                              String selectedApplicationId, LocalDate settlementDate) {}
+                              String selectedApplicationId, String selectedProductCode, String selectedRegion,
+                              LocalDate settlementDate) {}
 
     public record ChatResponse(String traceId, Intent intent, String answer, ToolResult businessCard) {}
 }

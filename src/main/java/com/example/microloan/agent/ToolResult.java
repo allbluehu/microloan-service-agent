@@ -1,6 +1,7 @@
 package com.example.microloan.agent;
 
 import com.example.microloan.application.ApplicationStatus;
+import com.example.microloan.knowledge.KnowledgeAnswer;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import com.example.microloan.settlement.SettlementQuote;
@@ -8,7 +9,7 @@ import com.example.microloan.ticket.ServiceTicket;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public sealed interface ToolResult permits ToolResult.Application, ToolResult.Payment, ToolResult.Repayment,
-        ToolResult.Settlement, ToolResult.Ticket {
+        ToolResult.Settlement, ToolResult.Ticket, ToolResult.Knowledge {
 
     record Application(@JsonValue ApplicationStatus value) implements ToolResult {}
 
@@ -19,4 +20,6 @@ public sealed interface ToolResult permits ToolResult.Application, ToolResult.Pa
     record Settlement(@JsonValue SettlementQuote value) implements ToolResult {}
 
     record Ticket(@JsonValue ServiceTicket value) implements ToolResult {}
+
+    record Knowledge(@JsonValue KnowledgeAnswer value) implements ToolResult {}
 }

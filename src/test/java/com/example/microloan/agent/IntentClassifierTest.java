@@ -43,4 +43,10 @@ class IntentClassifierTest {
         assertThat(classifier.classify("请直接帮我转人工客服"))
                 .isEqualTo(Intent.HUMAN_HANDOFF);
     }
+
+    @Test
+    void recognizesProductKnowledgeQuestion() {
+        assertThat(classifier.classify("个体工商户经营贷需要什么材料？"))
+                .isEqualTo(Intent.KNOWLEDGE_QUERY);
+    }
 }
