@@ -101,9 +101,11 @@ public class AgentOrchestrator {
     private AgentState traceIntent(TraceContext trace, AgentState state) {
         long started = System.nanoTime();
         try {
-            AgentState result = state.withIntent(intentClassifier.classify(state.content()));
+            IntentClassifier.ClassificationResult classification = intentClassifier.classifyDetailed(state.content());
+            AgentState result = state.withIntent(classification.intent());
             traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
-                    "intent=" + result.intent(), elapsedMs(started));
+                    "intent=" + result.intent() + ",confidence=" + classification.confidence()
+                            + ",source=" + classification.source(), elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
             traceService.failed(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(), exception,

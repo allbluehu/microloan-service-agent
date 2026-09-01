@@ -1,5 +1,7 @@
 package com.example.microloan.agent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.ai.chat.model.ChatModel;
@@ -10,46 +12,58 @@ import org.springframework.stereotype.Component;
 @Component
 public class IntentClassifier {
 
-    public static final String PROMPT_VERSION = "intent-v1";
-    private static final String PROMPT_RESOURCE = "prompts/intent-classifier-v1.txt";
+    public static final String PROMPT_VERSION = "intent-v2";
+    private static final double MODEL_CONFIDENCE_THRESHOLD = 0.75;
+    private static final String PROMPT_RESOURCE = "prompts/intent-classifier-v2.txt";
     private static final String PROMPT = loadPrompt();
 
     private final ObjectProvider<ChatModel> chatModelProvider;
+    private final ObjectMapper objectMapper;
 
-    public IntentClassifier(ObjectProvider<ChatModel> chatModelProvider) {
+    public IntentClassifier(ObjectProvider<ChatModel> chatModelProvider, ObjectMapper objectMapper) {
         this.chatModelProvider = chatModelProvider;
+        this.objectMapper = objectMapper;
     }
 
     public Intent classify(String message) {
+        return classifyDetailed(message).intent();
+    }
+
+    public ClassificationResult classifyDetailed(String message) {
         ChatModel model = chatModelProvider.getIfAvailable();
         if (model != null) {
             try {
-                Intent parsed = parseModelOutput(model.call(renderPrompt(message)));
-                if (parsed != null) {
+                ClassificationResult parsed = parseModelOutput(model.call(renderPrompt(message)));
+                if (parsed != null && parsed.confidence() >= MODEL_CONFIDENCE_THRESHOLD) {
                     return parsed;
                 }
             } catch (RuntimeException ignored) {
                 // Classification can safely degrade to narrow rules; business facts never come from this fallback.
             }
         }
-        return ruleFallback(message);
+        Intent fallback = ruleFallback(message);
+        return new ClassificationResult(fallback, fallback == Intent.UNKNOWN ? 0.0 : 1.0, ClassificationSource.RULE);
     }
 
-    Intent parseModelOutput(String output) {
+    ClassificationResult parseModelOutput(String output) {
         if (output == null) {
             return null;
         }
-        // 仅接受协议内的完整标签，避免解释性文本或提示词注入片段成为路由指令。
-        return switch (output.trim()) {
-            case "NEXT_REPAYMENT_QUERY" -> Intent.NEXT_REPAYMENT_QUERY;
-            case "APPLICATION_STATUS_QUERY" -> Intent.APPLICATION_STATUS_QUERY;
-            case "PAYMENT_RECORDS_QUERY" -> Intent.PAYMENT_RECORDS_QUERY;
-            case "EARLY_SETTLEMENT_QUOTE" -> Intent.EARLY_SETTLEMENT_QUOTE;
-            case "HUMAN_HANDOFF" -> Intent.HUMAN_HANDOFF;
-            case "KNOWLEDGE_QUERY" -> Intent.KNOWLEDGE_QUERY;
-            case "UNKNOWN" -> Intent.UNKNOWN;
-            default -> null;
-        };
+        try {
+            ModelOutput parsed = objectMapper.readValue(output, ModelOutput.class);
+            if (parsed.intent() == null) {
+                return null;
+            }
+            Intent intent = Intent.valueOf(parsed.intent());
+            if (intent == Intent.HIGH_RISK_COMPLAINT || parsed.confidence() == null
+                    || parsed.confidence() < 0 || parsed.confidence() > 1) {
+                return null;
+            }
+            return new ClassificationResult(intent, parsed.confidence(), ClassificationSource.MODEL);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            // JSON 结构、标签或置信度任一越界都视为不可信模型输出。
+            return null;
+        }
     }
 
     String renderPrompt(String message) {
@@ -94,4 +108,27 @@ public class IntentClassifier {
                 || message.contains("什么时候") || message.contains("多少");
         return repaymentTopic && nextPeriod ? Intent.NEXT_REPAYMENT_QUERY : Intent.UNKNOWN;
     }
+
+    public record ClassificationResult(
+            /** 最终用于确定性路由的意图。 */
+            Intent intent,
+            /** 分类置信度，取值范围为 0 到 1。 */
+            double confidence,
+            /** 分类结果来自模型还是本地规则。 */
+            ClassificationSource source
+    ) {}
+
+    public enum ClassificationSource {
+        /** 通过结构化模型输出得到。 */
+        MODEL,
+        /** 由本地确定性规则生成或降级得到。 */
+        RULE
+    }
+
+    private record ModelOutput(
+            /** 模型返回的意图标签。 */
+            String intent,
+            /** 模型返回的置信度。 */
+            Double confidence
+    ) {}
 }

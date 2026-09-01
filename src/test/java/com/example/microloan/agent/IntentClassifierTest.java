@@ -1,5 +1,6 @@
 package com.example.microloan.agent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
@@ -8,7 +9,8 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 class IntentClassifierTest {
 
     private final IntentClassifier classifier = new IntentClassifier(
-            new StaticListableBeanFactory().getBeanProvider(org.springframework.ai.chat.model.ChatModel.class));
+            new StaticListableBeanFactory().getBeanProvider(org.springframework.ai.chat.model.ChatModel.class),
+            new ObjectMapper());
 
     @Test
     void recognizesNextRepaymentQuestionWithoutAConfiguredModel() {
@@ -52,19 +54,28 @@ class IntentClassifierTest {
 
     @Test
     void loadsVersionedPromptFromClasspath() {
-        assertThat(IntentClassifier.PROMPT_VERSION).isEqualTo("intent-v1");
+        assertThat(IntentClassifier.PROMPT_VERSION).isEqualTo("intent-v2");
         assertThat(classifier.renderPrompt("测试问题"))
-                .contains("只输出以下一个标签", "用户输入：测试问题");
+                .contains("只输出一个 JSON 对象", "用户输入：测试问题");
     }
 
     @Test
     void acceptsAnExactModelLabel() {
-        assertThat(classifier.parseModelOutput("PAYMENT_RECORDS_QUERY"))
+        assertThat(classifier.parseModelOutput(
+                "{\"intent\":\"PAYMENT_RECORDS_QUERY\",\"confidence\":0.92}"))
+                .extracting(IntentClassifier.ClassificationResult::intent)
                 .isEqualTo(Intent.PAYMENT_RECORDS_QUERY);
     }
 
     @Test
     void rejectsExplanatoryModelText() {
         assertThat(classifier.parseModelOutput("这不是 HUMAN_HANDOFF")).isNull();
+    }
+
+    @Test
+    void rejectsOutOfRangeConfidence() {
+        assertThat(classifier.parseModelOutput(
+                "{\"intent\":\"HUMAN_HANDOFF\",\"confidence\":1.2}"))
+                .isNull();
     }
 }
