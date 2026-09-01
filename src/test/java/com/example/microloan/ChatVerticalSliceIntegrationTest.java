@@ -8,11 +8,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.microloan.knowledge.KnowledgeAnswer;
+import com.example.microloan.knowledge.KnowledgeService;
 import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
 import com.example.microloan.ticket.TicketService;
 import com.example.microloan.ticket.TicketType;
 import java.util.concurrent.CompletableFuture;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -52,6 +58,9 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private TicketService ticketService;
+
+    @Autowired
+    private KnowledgeService knowledgeService;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -292,6 +301,49 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void ragBaselineMeetsRecallIsolationAndRefusalGates() throws Exception {
+        JsonNode cases;
+        try (InputStream input = Objects.requireNonNull(
+                getClass().getResourceAsStream("/evaluation/rag-baseline.json"))) {
+            cases = objectMapper.readTree(input);
+        }
+        assertThat(cases).hasSize(50);
+
+        int evidenceCases = 0;
+        int refusalCases = 0;
+        List<String> missedEvidence = new ArrayList<>();
+        List<String> incorrectAnswers = new ArrayList<>();
+        for (JsonNode evaluationCase : cases) {
+            String question = evaluationCase.path("question").asText();
+            KnowledgeAnswer answer = knowledgeService.answer(
+                    question,
+                    nullableText(evaluationCase, "selectedProductCode"),
+                    nullableText(evaluationCase, "selectedRegion"));
+            if (evaluationCase.path("expectRefusal").asBoolean()) {
+                refusalCases++;
+                if (!answer.sources().isEmpty()) {
+                    incorrectAnswers.add(question);
+                }
+                continue;
+            }
+
+            evidenceCases++;
+            boolean expectedSourceRecalled = answer.sources().stream().anyMatch(source ->
+                    source.documentId().equals(evaluationCase.path("expectedDocumentId").asText())
+                            && source.chunkId().equals(evaluationCase.path("expectedChunkId").asText()));
+            if (!expectedSourceRecalled) {
+                missedEvidence.add(question);
+            }
+        }
+
+        // These deterministic gates protect retrieval quality before vector recall is introduced.
+        assertThat(evidenceCases).isEqualTo(25);
+        assertThat(refusalCases).isEqualTo(25);
+        assertThat(missedEvidence).isEmpty();
+        assertThat(incorrectAnswers).isEmpty();
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersApplicationThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 
@@ -489,6 +541,11 @@ class ChatVerticalSliceIntegrationTest {
                 .andReturn();
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         return body.get("accessToken").asText();
+    }
+
+    private String nullableText(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        return value == null || value.isNull() ? null : value.asText();
     }
 
     private String stepUp(String loginToken) throws Exception {
