@@ -57,6 +57,7 @@
 - [x] 将意图分类提示词外置为版本化 classpath 资源，并让 Agent Trace 复用同一版本标识（当前共 54 个测试）
 - [x] 意图分类仅接受协议内的精确标签，解释性输出、格式异常或模型故障统一回退确定性规则（当前共 56 个测试）
 - [x] 意图分类升级为带置信度的严格 JSON 协议，低于 0.75 或越界输出回退规则，并在 Trace 记录来源（当前共 57 个测试）
+- [x] 建立按客户隔离的 chat_session / chat_message，事务化保存脱敏且限长的用户消息与最终答复（当前共 60 个测试）
 
 ## 下一步
 
@@ -83,7 +84,7 @@
 - [x] UNKNOWN 与低置信度模型结果均有确定性兜底，不允许模型直接选择任意路由
 - [x] `AgentState.toolResult` 已使用 sealed interface，具体业务 DTO 通过同包 wrapper 封装
 - [x] prompt 采用版本化 classpath 文件管理；`agent_trace.prompt_version` 直接引用分类器版本常量，避免双处配置漂移
-- `chat_session` / `chat_message` 表结构：ER 图有实体、`04` 核心表一节缺失
+- [x] `chat_session` / `chat_message` 已落库并接入对话写入；业务事实仍实时查询，不从消息历史恢复
 - RAG 待定项：rerank 手段（cross-encoder vs LLM 重排）、语义切分参数（chunk size / overlap）；Embedding 已确定为 text-embedding-3-small 的 1024 维输出
 - 重试 / 超时参数量化：重试次数、退避策略、可重试错误类别（429 / 5xx / 超时）
 - 复合意图处理策略（如"查账单，顺便投诉"），当前 `Intent` 为单值字段

@@ -129,6 +129,42 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void conversationPersistsRedactedUserAndTracedAssistantMessages() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-HISTORY-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M-HISTORY-1",
+                                  "content": "备注号码 110101199001011234"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        List<String> contents = jdbcTemplate.queryForList("""
+                SELECT m.content
+                FROM chat_message m
+                JOIN chat_session s ON s.id = m.session_id
+                WHERE s.session_id = 'S-HISTORY-1'
+                ORDER BY m.id
+                """, String.class);
+        Integer tracedAnswers = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM chat_message m
+                JOIN chat_session s ON s.id = m.session_id
+                WHERE s.session_id = 'S-HISTORY-1'
+                  AND m.role = 'ASSISTANT'
+                  AND m.trace_id IS NOT NULL
+                """, Integer.class);
+
+        assertThat(contents).hasSize(2);
+        assertThat(contents.getFirst()).isEqualTo("备注号码 [REDACTED]");
+        assertThat(tracedAnswers).isEqualTo(1);
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersLoanThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 
@@ -465,7 +501,8 @@ class ChatVerticalSliceIntegrationTest {
     void everyBusinessTableAndColumnHasDatabaseComment() {
         String businessTables = """
                 'customer', 'loan', 'repayment_plan', 'loan_application', 'payment_record',
-                'service_ticket', 'agent_trace', 'knowledge_document', 'knowledge_chunk'
+                'service_ticket', 'chat_session', 'chat_message', 'agent_trace',
+                'knowledge_document', 'knowledge_chunk'
                 """;
         List<String> uncommentedTables = jdbcTemplate.queryForList("""
                 SELECT c.relname

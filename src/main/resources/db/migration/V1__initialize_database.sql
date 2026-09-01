@@ -131,6 +131,29 @@ CREATE TABLE service_ticket (
 
 CREATE INDEX idx_service_ticket_customer ON service_ticket(customer_id, created_at DESC);
 
+CREATE TABLE chat_session (
+    id BIGSERIAL PRIMARY KEY,                              -- 对话会话数据库主键
+    session_id VARCHAR(64) NOT NULL UNIQUE,               -- 客户端使用的唯一会话标识
+    customer_id BIGINT NOT NULL REFERENCES customer(id), -- 会话所属客户主键
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 会话创建时间
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP  -- 会话最近消息时间
+);
+
+CREATE TABLE chat_message (
+    id BIGSERIAL PRIMARY KEY,                              -- 对话消息数据库主键
+    session_id BIGINT NOT NULL REFERENCES chat_session(id), -- 消息所属会话主键
+    message_id VARCHAR(64) NOT NULL,                      -- 客户端消息标识或服务端派生消息标识
+    role VARCHAR(20) NOT NULL,                            -- 消息角色：USER 或 ASSISTANT
+    content VARCHAR(2000) NOT NULL,                       -- 脱敏并截断后的消息内容
+    intent VARCHAR(50),                                   -- Assistant 消息对应的最终意图
+    trace_id VARCHAR(64),                                 -- Assistant 消息对应的 Agent Trace 标识
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 消息创建时间
+    CONSTRAINT ck_chat_message_role CHECK (role IN ('USER', 'ASSISTANT')) -- 限制受控消息角色
+);
+
+CREATE INDEX idx_chat_session_customer ON chat_session(customer_id, updated_at DESC);
+CREATE INDEX idx_chat_message_session ON chat_message(session_id, created_at, id);
+
 CREATE TABLE agent_trace (
     id BIGSERIAL PRIMARY KEY,                              -- Trace 记录数据库主键
     trace_id VARCHAR(64) NOT NULL,                        -- 单次 Agent 请求的全链路追踪标识
@@ -311,6 +334,24 @@ COMMENT ON COLUMN service_ticket.status IS '工单当前处理状态';
 COMMENT ON COLUMN service_ticket.idempotency_key IS '客户、会话、类型与关联资源组成的写入幂等键';
 COMMENT ON COLUMN service_ticket.created_at IS '工单创建时间';
 
+COMMENT ON TABLE chat_session IS '按客户隔离的客服对话会话';
+COMMENT ON COLUMN chat_session.id IS '对话会话数据库主键';
+COMMENT ON COLUMN chat_session.session_id IS '客户端使用的唯一会话标识';
+COMMENT ON COLUMN chat_session.customer_id IS '会话所属客户主键';
+COMMENT ON COLUMN chat_session.created_at IS '会话创建时间';
+COMMENT ON COLUMN chat_session.updated_at IS '会话最近消息时间';
+
+COMMENT ON TABLE chat_message IS '经过脱敏和长度限制的客服对话消息';
+COMMENT ON COLUMN chat_message.id IS '对话消息数据库主键';
+COMMENT ON COLUMN chat_message.session_id IS '消息所属会话主键';
+COMMENT ON COLUMN chat_message.message_id IS '客户端消息标识或服务端派生消息标识';
+COMMENT ON COLUMN chat_message.role IS '消息角色：USER 或 ASSISTANT';
+COMMENT ON COLUMN chat_message.content IS '脱敏并截断后的消息内容';
+COMMENT ON COLUMN chat_message.intent IS 'Assistant 消息对应的最终意图';
+COMMENT ON COLUMN chat_message.trace_id IS 'Assistant 消息对应的 Agent Trace 标识';
+COMMENT ON COLUMN chat_message.created_at IS '消息创建时间';
+COMMENT ON CONSTRAINT ck_chat_message_role ON chat_message IS '限制消息角色为 USER 或 ASSISTANT';
+
 COMMENT ON TABLE agent_trace IS 'Agent 节点级执行追踪与审计记录';
 COMMENT ON COLUMN agent_trace.id IS 'Trace 记录数据库主键';
 COMMENT ON COLUMN agent_trace.trace_id IS '单次 Agent 请求的全链路追踪标识';
@@ -365,6 +406,8 @@ COMMENT ON INDEX idx_repayment_plan_next IS '按贷款和到期日查询下一�
 COMMENT ON INDEX idx_loan_application_customer IS '按客户隔离查询贷款申请';
 COMMENT ON INDEX idx_payment_record_loan_time IS '按贷款和支付时间倒序查询还款记录';
 COMMENT ON INDEX idx_service_ticket_customer IS '按客户和创建时间倒序查询工单';
+COMMENT ON INDEX idx_chat_session_customer IS '按客户和最近消息时间查询会话';
+COMMENT ON INDEX idx_chat_message_session IS '按会话和时间顺序查询消息';
 COMMENT ON INDEX idx_agent_trace_customer IS '按客户和创建时间查询 Agent Trace';
 COMMENT ON INDEX idx_knowledge_chunk_fts IS '知识切片全文检索 GIN 索引';
 COMMENT ON INDEX idx_knowledge_chunk_trgm IS '知识检索文本模糊匹配 trigram 索引';

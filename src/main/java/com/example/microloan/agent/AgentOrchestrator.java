@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AgentOrchestrator {
@@ -33,12 +34,13 @@ public class AgentOrchestrator {
     private final TicketTools ticketTools;
     private final AgentTraceService traceService;
     private final KnowledgeService knowledgeService;
+    private final ChatHistoryService chatHistoryService;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
                              ApplicationTools applicationTools, PaymentTools paymentTools,
                              SettlementTools settlementTools, RiskClassifier riskClassifier,
                              TicketTools ticketTools, AgentTraceService traceService,
-                             KnowledgeService knowledgeService) {
+                             KnowledgeService knowledgeService, ChatHistoryService chatHistoryService) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
@@ -48,13 +50,16 @@ public class AgentOrchestrator {
         this.ticketTools = ticketTools;
         this.traceService = traceService;
         this.knowledgeService = knowledgeService;
+        this.chatHistoryService = chatHistoryService;
     }
 
+    @Transactional
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
                              String selectedApplicationId, String selectedProductCode, String selectedRegion,
                              LocalDate settlementDate) {
         String traceId = UUID.randomUUID().toString();
         CustomerPrincipal principal = authenticatedPrincipal();
+        Long sessionDbId = chatHistoryService.recordUserMessage(principal.customerId(), sessionId, messageId, content);
         TraceContext trace = traceService.start(traceId, sessionId, principal.customerId());
         AgentState state = new AgentState(traceId, sessionId, messageId, content,
                 selectedLoanId, selectedApplicationId, selectedProductCode, selectedRegion, settlementDate,
@@ -65,14 +70,16 @@ public class AgentOrchestrator {
             // 高风险接管先于普通意图分类，避免模型把投诉误路由到查询或营销知识。
             AgentState highRiskState = state.withIntent(Intent.HIGH_RISK_COMPLAINT);
             traceRoute(trace, highRiskState);
-            return traceExecution(trace, highRiskState, () -> handoffHighRisk(highRiskState));
+            AgentState completed = traceExecution(trace, highRiskState, () -> handoffHighRisk(highRiskState));
+            chatHistoryService.recordAssistantMessage(sessionDbId, messageId, completed);
+            return completed;
         }
         state = traceIntent(trace, state);
         traceRoute(trace, state);
         AgentState routedState = state;
 
         // The switch is the deterministic routing boundary; the model cannot select arbitrary application code.
-        return traceExecution(trace, routedState, () -> switch (routedState.intent()) {
+        AgentState completed = traceExecution(trace, routedState, () -> switch (routedState.intent()) {
             case NEXT_REPAYMENT_QUERY -> queryNextRepayment(routedState);
             case APPLICATION_STATUS_QUERY -> queryApplicationStatus(routedState);
             case PAYMENT_RECORDS_QUERY -> queryPaymentRecords(routedState);
@@ -82,6 +89,8 @@ public class AgentOrchestrator {
             case KNOWLEDGE_QUERY -> answerKnowledge(routedState);
             case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         });
+        chatHistoryService.recordAssistantMessage(sessionDbId, messageId, completed);
+        return completed;
     }
 
     private AgentState traceRisk(TraceContext trace, AgentState state) {
