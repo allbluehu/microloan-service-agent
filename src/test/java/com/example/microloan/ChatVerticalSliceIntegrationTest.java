@@ -57,7 +57,7 @@ class ChatVerticalSliceIntegrationTest {
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
         String token = login("C10001");
 
-        mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
+        MvcResult response = mockMvc.perform(post("/api/v1/chat/sessions/S10001/messages")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -71,7 +71,26 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.intent").value("NEXT_REPAYMENT_QUERY"))
                 .andExpect(jsonPath("$.businessCard.totalAmount").value("1262.50"))
                 .andExpect(jsonPath("$.businessCard.dueDate").value("2026-09-15"))
-                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("1262.50")));
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("1262.50")))
+                .andReturn();
+
+        String traceId = objectMapper.readTree(response.getResponse().getContentAsString()).path("traceId").asText();
+        mockMvc.perform(get("/api/v1/agent/traces/{traceId}", traceId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(4))
+                .andExpect(jsonPath("$[0].nodeName").value("RISK_CLASSIFIER"))
+                .andExpect(jsonPath("$[0].inputSummary").value("messageId=M10001"))
+                .andExpect(jsonPath("$[1].nodeName").value("INTENT_CLASSIFIER"))
+                .andExpect(jsonPath("$[2].nodeName").value("ROUTE_DECISION"))
+                .andExpect(jsonPath("$[3].nodeName").value("TOOL_EXECUTOR"))
+                .andExpect(jsonPath("$[3].outputSummary").value("resultType=Repayment"));
+
+        String otherCustomerToken = login("C10002");
+        mockMvc.perform(get("/api/v1/agent/traces/{traceId}", traceId)
+                        .header("Authorization", "Bearer " + otherCustomerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

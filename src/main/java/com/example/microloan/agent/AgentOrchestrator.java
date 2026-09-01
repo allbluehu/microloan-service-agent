@@ -1,14 +1,19 @@
 package com.example.microloan.agent;
 
+import com.example.microloan.agent.trace.AgentTraceService;
+import com.example.microloan.agent.trace.AgentTraceService.TraceContext;
 import com.example.microloan.application.ApplicationStatus;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import com.example.microloan.settlement.SettlementQuote;
+import com.example.microloan.security.CustomerPrincipal;
 import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
 import com.example.microloan.ticket.TicketType;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,11 +26,12 @@ public class AgentOrchestrator {
     private final SettlementTools settlementTools;
     private final RiskClassifier riskClassifier;
     private final TicketTools ticketTools;
+    private final AgentTraceService traceService;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
                              ApplicationTools applicationTools, PaymentTools paymentTools,
                              SettlementTools settlementTools, RiskClassifier riskClassifier,
-                             TicketTools ticketTools) {
+                             TicketTools ticketTools, AgentTraceService traceService) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
@@ -33,29 +39,97 @@ public class AgentOrchestrator {
         this.settlementTools = settlementTools;
         this.riskClassifier = riskClassifier;
         this.ticketTools = ticketTools;
+        this.traceService = traceService;
     }
 
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
                              String selectedApplicationId, LocalDate settlementDate) {
-        AgentState state = new AgentState(UUID.randomUUID().toString(), sessionId, messageId, content,
+        String traceId = UUID.randomUUID().toString();
+        CustomerPrincipal principal = authenticatedPrincipal();
+        TraceContext trace = traceService.start(traceId, sessionId, principal.customerId());
+        AgentState state = new AgentState(traceId, sessionId, messageId, content,
                 selectedLoanId, selectedApplicationId, settlementDate, RiskLevel.LOW, null,
                 Intent.UNKNOWN, null, null);
-        state = state.withRisk(riskClassifier.classify(content));
+        state = traceRisk(trace, state);
         if (state.riskLevel() == RiskLevel.HIGH) {
-            return handoffHighRisk(state.withIntent(Intent.HIGH_RISK_COMPLAINT));
+            AgentState highRiskState = state.withIntent(Intent.HIGH_RISK_COMPLAINT);
+            traceRoute(trace, highRiskState);
+            return traceExecution(trace, highRiskState, () -> handoffHighRisk(highRiskState));
         }
-        state = state.withIntent(intentClassifier.classify(content));
+        state = traceIntent(trace, state);
+        traceRoute(trace, state);
+        AgentState routedState = state;
 
         // The switch is the deterministic routing boundary; the model cannot select arbitrary application code.
-        return switch (state.intent()) {
-            case NEXT_REPAYMENT_QUERY -> queryNextRepayment(state);
-            case APPLICATION_STATUS_QUERY -> queryApplicationStatus(state);
-            case PAYMENT_RECORDS_QUERY -> queryPaymentRecords(state);
-            case EARLY_SETTLEMENT_QUOTE -> calculateEarlySettlement(state);
-            case HIGH_RISK_COMPLAINT -> handoffHighRisk(state);
-            case HUMAN_HANDOFF -> handoffRequested(state);
-            case UNKNOWN -> state.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
-        };
+        return traceExecution(trace, routedState, () -> switch (routedState.intent()) {
+            case NEXT_REPAYMENT_QUERY -> queryNextRepayment(routedState);
+            case APPLICATION_STATUS_QUERY -> queryApplicationStatus(routedState);
+            case PAYMENT_RECORDS_QUERY -> queryPaymentRecords(routedState);
+            case EARLY_SETTLEMENT_QUOTE -> calculateEarlySettlement(routedState);
+            case HIGH_RISK_COMPLAINT -> handoffHighRisk(routedState);
+            case HUMAN_HANDOFF -> handoffRequested(routedState);
+            case UNKNOWN -> routedState.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
+        });
+    }
+
+    private AgentState traceRisk(TraceContext trace, AgentState state) {
+        long started = System.nanoTime();
+        try {
+            AgentState result = state.withRisk(riskClassifier.classify(state.content()));
+            traceService.success(trace, "RISK_CLASSIFIER", "messageId=" + state.messageId(),
+                    "riskLevel=" + result.riskLevel() + ",ticketType=" + result.ticketType(), elapsedMs(started));
+            return result;
+        } catch (RuntimeException exception) {
+            traceService.failed(trace, "RISK_CLASSIFIER", "messageId=" + state.messageId(), exception,
+                    elapsedMs(started));
+            throw exception;
+        }
+    }
+
+    private AgentState traceIntent(TraceContext trace, AgentState state) {
+        long started = System.nanoTime();
+        try {
+            AgentState result = state.withIntent(intentClassifier.classify(state.content()));
+            traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
+                    "intent=" + result.intent(), elapsedMs(started));
+            return result;
+        } catch (RuntimeException exception) {
+            traceService.failed(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(), exception,
+                    elapsedMs(started));
+            throw exception;
+        }
+    }
+
+    private void traceRoute(TraceContext trace, AgentState state) {
+        traceService.success(trace, "ROUTE_DECISION", "intent=" + state.intent(),
+                "route=" + state.intent(), 0);
+    }
+
+    private AgentState traceExecution(TraceContext trace, AgentState state, Supplier<AgentState> execution) {
+        long started = System.nanoTime();
+        try {
+            AgentState result = execution.get();
+            String resultType = result.toolResult() == null ? "NONE" : result.toolResult().getClass().getSimpleName();
+            traceService.success(trace, "TOOL_EXECUTOR", "intent=" + state.intent(),
+                    "resultType=" + resultType, elapsedMs(started));
+            return result;
+        } catch (RuntimeException exception) {
+            traceService.failed(trace, "TOOL_EXECUTOR", "intent=" + state.intent(), exception,
+                    elapsedMs(started));
+            throw exception;
+        }
+    }
+
+    private CustomerPrincipal authenticatedPrincipal() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof CustomerPrincipal customer) {
+            return customer;
+        }
+        throw new IllegalStateException("Authenticated customer context is required");
+    }
+
+    private long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
     }
 
     private AgentState queryNextRepayment(AgentState state) {
