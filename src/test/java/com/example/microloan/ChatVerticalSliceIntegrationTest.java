@@ -1,5 +1,6 @@
 package com.example.microloan;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -7,6 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.microloan.ticket.ServiceTicket;
+import com.example.microloan.ticket.TicketPriority;
+import com.example.microloan.ticket.TicketService;
+import com.example.microloan.ticket.TicketType;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -43,6 +49,9 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TicketService ticketService;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -267,6 +276,68 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.code").value("LOAN_ACCESS_DENIED"));
     }
 
+    @Test
+    void highRiskComplaintCreatesOneHighPriorityTicketAndHandsOff() throws Exception {
+        String token = login("C10001");
+        String request = """
+                {
+                  "messageId": "M10008",
+                  "content": "催收把我的欠款告诉同事，我要投诉"
+                }
+                """;
+
+        MvcResult first = mockMvc.perform(post("/api/v1/chat/sessions/S-RISK-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("HIGH_RISK_COMPLAINT"))
+                .andExpect(jsonPath("$.businessCard.type").value("PRIVACY_BREACH"))
+                .andExpect(jsonPath("$.businessCard.priority").value("HIGH"))
+                .andExpect(jsonPath("$.businessCard.status").value("OPEN"))
+                .andReturn();
+
+        MvcResult duplicate = mockMvc.perform(post("/api/v1/chat/sessions/S-RISK-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThatJsonTicketIdsMatch(first, duplicate);
+    }
+
+    @Test
+    void concurrentTicketCreationReturnsTheSameTicket() {
+        CompletableFuture<ServiceTicket> first = CompletableFuture.supplyAsync(() -> ticketService.create(
+                10001L, "S-CONCURRENT", TicketType.PAYMENT_NOT_POSTED, "L10001",
+                "已还款但账单未更新", TicketPriority.HIGH));
+        CompletableFuture<ServiceTicket> second = CompletableFuture.supplyAsync(() -> ticketService.create(
+                10001L, "S-CONCURRENT", TicketType.PAYMENT_NOT_POSTED, "L10001",
+                "重复提交的摘要不会创建新工单", TicketPriority.HIGH));
+
+        assertThat(first.join().ticketId()).isEqualTo(second.join().ticketId());
+    }
+
+    @Test
+    void explicitHumanRequestHandsOffWithoutRepeatedRetention() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-HUMAN-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M10009",
+                                  "content": "请直接帮我转人工客服"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent").value("HUMAN_HANDOFF"))
+                .andExpect(jsonPath("$.businessCard.priority").value("NORMAL"))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("正在为你转接人工客服")));
+    }
+
     private String login(String customerNo) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -290,5 +361,13 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.expiresIn").value(300))
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("accessToken").asText();
+    }
+
+    private void assertThatJsonTicketIdsMatch(MvcResult first, MvcResult second) throws Exception {
+        String firstId = objectMapper.readTree(first.getResponse().getContentAsString())
+                .path("businessCard").path("ticketId").asText();
+        String secondId = objectMapper.readTree(second.getResponse().getContentAsString())
+                .path("businessCard").path("ticketId").asText();
+        assertThat(firstId).isNotBlank().isEqualTo(secondId);
     }
 }

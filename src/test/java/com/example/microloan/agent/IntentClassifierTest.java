@@ -37,4 +37,10 @@ class IntentClassifierTest {
         assertThat(classifier.classify("9月3日提前结清要多少钱？"))
                 .isEqualTo(Intent.EARLY_SETTLEMENT_QUOTE);
     }
+
+    @Test
+    void recognizesExplicitHumanHandoffRequest() {
+        assertThat(classifier.classify("请直接帮我转人工客服"))
+                .isEqualTo(Intent.HUMAN_HANDOFF);
+    }
 }

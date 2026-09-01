@@ -4,6 +4,9 @@ import com.example.microloan.application.ApplicationStatus;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import com.example.microloan.settlement.SettlementQuote;
+import com.example.microloan.ticket.ServiceTicket;
+import com.example.microloan.ticket.TicketPriority;
+import com.example.microloan.ticket.TicketType;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -16,21 +19,31 @@ public class AgentOrchestrator {
     private final ApplicationTools applicationTools;
     private final PaymentTools paymentTools;
     private final SettlementTools settlementTools;
+    private final RiskClassifier riskClassifier;
+    private final TicketTools ticketTools;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RepaymentTools repaymentTools,
                              ApplicationTools applicationTools, PaymentTools paymentTools,
-                             SettlementTools settlementTools) {
+                             SettlementTools settlementTools, RiskClassifier riskClassifier,
+                             TicketTools ticketTools) {
         this.intentClassifier = intentClassifier;
         this.repaymentTools = repaymentTools;
         this.applicationTools = applicationTools;
         this.paymentTools = paymentTools;
         this.settlementTools = settlementTools;
+        this.riskClassifier = riskClassifier;
+        this.ticketTools = ticketTools;
     }
 
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
                              String selectedApplicationId, LocalDate settlementDate) {
         AgentState state = new AgentState(UUID.randomUUID().toString(), sessionId, messageId, content,
-                selectedLoanId, selectedApplicationId, settlementDate, Intent.UNKNOWN, null, null);
+                selectedLoanId, selectedApplicationId, settlementDate, RiskLevel.LOW, null,
+                Intent.UNKNOWN, null, null);
+        state = state.withRisk(riskClassifier.classify(content));
+        if (state.riskLevel() == RiskLevel.HIGH) {
+            return handoffHighRisk(state.withIntent(Intent.HIGH_RISK_COMPLAINT));
+        }
         state = state.withIntent(intentClassifier.classify(content));
 
         // The switch is the deterministic routing boundary; the model cannot select arbitrary application code.
@@ -39,6 +52,8 @@ public class AgentOrchestrator {
             case APPLICATION_STATUS_QUERY -> queryApplicationStatus(state);
             case PAYMENT_RECORDS_QUERY -> queryPaymentRecords(state);
             case EARLY_SETTLEMENT_QUOTE -> calculateEarlySettlement(state);
+            case HIGH_RISK_COMPLAINT -> handoffHighRisk(state);
+            case HUMAN_HANDOFF -> handoffRequested(state);
             case UNKNOWN -> state.complete("当前支持查询下一期账单、贷款申请进度、还款记录和提前结清试算，请补充具体问题。");
         };
     }
@@ -92,6 +107,21 @@ public class AgentOrchestrator {
                         quote.remainingPrincipal().toPlainString(), quote.interest().toPlainString(),
                         quote.fee().toPlainString(), quote.notice());
         return state.complete(new ToolResult.Settlement(quote), answer);
+    }
+
+    private AgentState handoffHighRisk(AgentState state) {
+        ServiceTicket ticket = ticketTools.createServiceTicket(state.sessionId(), state.ticketType(),
+                state.selectedLoanId(), state.content(), TicketPriority.HIGH);
+        String answer = "已为你创建高优先级工单%s，并转交人工客服处理。请勿在聊天中继续发送完整证件号或银行卡号。"
+                .formatted(ticket.ticketId());
+        return state.complete(new ToolResult.Ticket(ticket), answer);
+    }
+
+    private AgentState handoffRequested(AgentState state) {
+        ServiceTicket ticket = ticketTools.createServiceTicket(state.sessionId(), TicketType.GENERAL_COMPLAINT,
+                state.selectedLoanId(), state.content(), TicketPriority.NORMAL);
+        return state.complete(new ToolResult.Ticket(ticket), "已创建工单%s，正在为你转接人工客服。"
+                .formatted(ticket.ticketId()));
     }
 
     private boolean isBlank(String value) {

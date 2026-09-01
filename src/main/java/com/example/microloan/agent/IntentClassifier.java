@@ -10,11 +10,13 @@ public class IntentClassifier {
 
     private static final String PROMPT = """
             你是小额贷客服意图分类器。只输出以下一个标签：
-            NEXT_REPAYMENT_QUERY、APPLICATION_STATUS_QUERY、PAYMENT_RECORDS_QUERY、EARLY_SETTLEMENT_QUOTE、UNKNOWN。
+            NEXT_REPAYMENT_QUERY、APPLICATION_STATUS_QUERY、PAYMENT_RECORDS_QUERY、EARLY_SETTLEMENT_QUOTE、
+            HUMAN_HANDOFF、UNKNOWN。
             NEXT_REPAYMENT_QUERY 表示用户在询问下一期、下个月或近期应还金额/日期。
             APPLICATION_STATUS_QUERY 表示用户在询问贷款申请的进度、状态或缺失资料。
             PAYMENT_RECORDS_QUERY 表示用户在询问过去的还款记录、支付记录或某次还款是否成功。
             EARLY_SETTLEMENT_QUOTE 表示用户希望试算提前还清或提前结清贷款的金额。
+            HUMAN_HANDOFF 表示用户明确要求人工客服或转人工。
             用户输入：%s
             """;
 
@@ -39,6 +41,9 @@ public class IntentClassifier {
                 if (output.contains("EARLY_SETTLEMENT_QUOTE")) {
                     return Intent.EARLY_SETTLEMENT_QUOTE;
                 }
+                if (output.contains("HUMAN_HANDOFF")) {
+                    return Intent.HUMAN_HANDOFF;
+                }
                 return output.contains("NEXT_REPAYMENT_QUERY") ? Intent.NEXT_REPAYMENT_QUERY : Intent.UNKNOWN;
             } catch (RuntimeException ignored) {
                 // Classification can safely degrade to narrow rules; business facts never come from this fallback.
@@ -48,6 +53,9 @@ public class IntentClassifier {
     }
 
     private Intent ruleFallback(String message) {
+        if (message.contains("转人工") || message.contains("人工客服") || message.contains("找人工")) {
+            return Intent.HUMAN_HANDOFF;
+        }
         if (message.contains("提前结清") || message.contains("提前还清")) {
             return Intent.EARLY_SETTLEMENT_QUOTE;
         }
