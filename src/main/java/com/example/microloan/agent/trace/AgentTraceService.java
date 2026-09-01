@@ -2,11 +2,15 @@ package com.example.microloan.agent.trace;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AgentTraceService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentTraceService.class);
     private static final String PROMPT_VERSION = "intent-v1";
 
     private final AgentTraceMapper traceMapper;
@@ -37,9 +41,14 @@ public class AgentTraceService {
 
     private void record(TraceContext context, String nodeName, String inputSummary, String outputSummary,
                         long latencyMs, String status) {
-        traceMapper.insert(context.traceId(), context.sessionId(), context.customerId(),
-                context.sequence().incrementAndGet(), nodeName, limit(inputSummary, 300), limit(outputSummary, 500),
-                null, "INTENT_CLASSIFIER".equals(nodeName) ? PROMPT_VERSION : null, latencyMs, status);
+        try {
+            traceMapper.insert(context.traceId(), context.sessionId(), context.customerId(),
+                    context.sequence().incrementAndGet(), nodeName, limit(inputSummary, 300), limit(outputSummary, 500),
+                    null, "INTENT_CLASSIFIER".equals(nodeName) ? PROMPT_VERSION : null, latencyMs, status);
+        } catch (DataAccessException exception) {
+            // Observability loss is reported locally but must not replace the customer-facing business outcome.
+            LOGGER.warn("Failed to persist agent trace {} node {}", context.traceId(), nodeName);
+        }
     }
 
     private String limit(String value, int maxLength) {

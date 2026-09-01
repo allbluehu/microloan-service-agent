@@ -140,12 +140,71 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void failedStepUpDoesNotIssueAnElevatedToken() throws Exception {
+        String loginToken = login("C10001");
+
+        mockMvc.perform(post("/api/v1/auth/step-up")
+                        .header("Authorization", "Bearer " + loginToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"password":"wrong-password"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("二次认证失败"));
+    }
+
+    @Test
     void protectedBusinessApiRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/loans/L10001/next-repayment"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
                 .andExpect(jsonPath("$.message").value("需要登录后访问"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/loans/L10001/next-repayment")
+                        .header("Authorization", "Bearer malformed-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    @Test
+    void missingBusinessIdentifiersProduceClarificationWithoutCallingTools() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CLARIFY/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-C1","content":"我下个月要还多少钱？"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andExpect(jsonPath("$.answer").value("请先选择需要查询的贷款。"));
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CLARIFY/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-C2","content":"查询申请进度"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andExpect(jsonPath("$.answer").value("请先选择需要查询的贷款申请。"));
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CLARIFY/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId":"M-C3",
+                                  "content":"提前结清要多少钱？",
+                                  "selectedLoanId":"L10001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessCard").doesNotExist())
+                .andExpect(jsonPath("$.answer").value("请提供提前结清的试算日期。"));
     }
 
     @Test

@@ -3,9 +3,12 @@ package com.example.microloan.agent;
 import com.example.microloan.agent.trace.AgentTraceService;
 import com.example.microloan.agent.trace.AgentTraceService.TraceContext;
 import com.example.microloan.application.ApplicationStatus;
+import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.repayment.NextRepaymentPlan;
+import com.example.microloan.repayment.LoanAccessDeniedException;
 import com.example.microloan.settlement.SettlementQuote;
+import com.example.microloan.settlement.StepUpAuthRequiredException;
 import com.example.microloan.security.CustomerPrincipal;
 import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
@@ -116,8 +119,19 @@ public class AgentOrchestrator {
         } catch (RuntimeException exception) {
             traceService.failed(trace, "TOOL_EXECUTOR", "intent=" + state.intent(), exception,
                     elapsedMs(started));
-            throw exception;
+            if (isExpectedBusinessRejection(exception)) {
+                throw exception;
+            }
+            // Unknown infrastructure/tool failures become one safe response without leaking implementation details.
+            throw new ToolUnavailableException(exception);
         }
+    }
+
+    private boolean isExpectedBusinessRejection(RuntimeException exception) {
+        return exception instanceof LoanAccessDeniedException
+                || exception instanceof ApplicationAccessDeniedException
+                || exception instanceof StepUpAuthRequiredException
+                || exception instanceof IllegalArgumentException;
     }
 
     private CustomerPrincipal authenticatedPrincipal() {

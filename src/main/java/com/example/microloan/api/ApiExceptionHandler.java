@@ -1,6 +1,7 @@
 package com.example.microloan.api;
 
 import com.example.microloan.application.ApplicationAccessDeniedException;
+import com.example.microloan.agent.ToolUnavailableException;
 import com.example.microloan.repayment.LoanAccessDeniedException;
 import com.example.microloan.settlement.StepUpAuthRequiredException;
 import java.util.UUID;
@@ -37,6 +38,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(StepUpAuthRequiredException.class)
     ResponseEntity<ApiError> handleStepUpRequired(StepUpAuthRequiredException exception) {
         return problem(HttpStatus.FORBIDDEN, "STEP_UP_AUTH_REQUIRED", exception.getMessage());
+    }
+
+    @ExceptionHandler(ToolUnavailableException.class)
+    ResponseEntity<ApiError> handleToolUnavailable(ToolUnavailableException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "TOOL_UNAVAILABLE", exception.getMessage());
     }
 
     @ExceptionHandler(ResponseStatusException.class)
