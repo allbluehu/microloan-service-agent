@@ -31,6 +31,7 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.support.ResourcePatternResolver;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -83,6 +84,9 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private ResourcePatternResolver resourcePatternResolver;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -455,6 +459,41 @@ class ChatVerticalSliceIntegrationTest {
             assertThat(knowledgeMapper.countChunks(document.id())).isPositive();
         }
         assertThat(knowledgeMapper.searchPublished("账户安全", "GENERAL_SERVICE", "ALL", 3)).isEmpty();
+    }
+
+    @Test
+    void everyBusinessTableAndColumnHasDatabaseComment() {
+        String businessTables = """
+                'customer', 'loan', 'repayment_plan', 'loan_application', 'payment_record',
+                'service_ticket', 'agent_trace', 'knowledge_document', 'knowledge_chunk'
+                """;
+        List<String> uncommentedTables = jdbcTemplate.queryForList("""
+                SELECT c.relname
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relkind = 'r'
+                  AND c.relname IN (%s)
+                  AND COALESCE(obj_description(c.oid, 'pg_class'), '') = ''
+                ORDER BY c.relname
+                """.formatted(businessTables), String.class);
+        List<String> uncommentedColumns = jdbcTemplate.queryForList("""
+                SELECT c.relname || '.' || a.attname
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid
+                LEFT JOIN pg_description d ON d.objoid = c.oid AND d.objsubid = a.attnum
+                WHERE n.nspname = 'public'
+                  AND c.relkind = 'r'
+                  AND c.relname IN (%s)
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
+                  AND COALESCE(d.description, '') = ''
+                ORDER BY c.relname, a.attnum
+                """.formatted(businessTables), String.class);
+
+        assertThat(uncommentedTables).isEmpty();
+        assertThat(uncommentedColumns).isEmpty();
     }
 
     @Test
