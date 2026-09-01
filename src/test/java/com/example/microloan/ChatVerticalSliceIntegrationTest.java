@@ -1,6 +1,7 @@
 package com.example.microloan;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,7 +12,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.microloan.knowledge.KnowledgeAnswer;
 import com.example.microloan.knowledge.KnowledgeChunkForEmbedding;
 import com.example.microloan.knowledge.KnowledgeEvidence;
+import com.example.microloan.knowledge.KnowledgeImportResult;
+import com.example.microloan.knowledge.KnowledgeImportService;
 import com.example.microloan.knowledge.KnowledgeMapper;
+import com.example.microloan.knowledge.KnowledgeDocumentIdentity;
+import com.example.microloan.knowledge.KnowledgePublicationService;
 import com.example.microloan.knowledge.KnowledgeService;
 import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
@@ -67,6 +72,12 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private KnowledgeMapper knowledgeMapper;
+
+    @Autowired
+    private KnowledgeImportService knowledgeImportService;
+
+    @Autowired
+    private KnowledgePublicationService knowledgePublicationService;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -370,6 +381,57 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void markdownDraftImportIsTransactionalIdempotentAndNotCustomerVisible() {
+        String markdown = draftKnowledgeMarkdown("导入的草稿内容仅用于测试。");
+
+        KnowledgeImportResult imported = knowledgeImportService.importMarkdownDraft(markdown);
+        KnowledgeImportResult duplicate = knowledgeImportService.importMarkdownDraft(markdown);
+
+        assertThat(imported.duplicate()).isFalse();
+        assertThat(imported.chunkCount()).isEqualTo(2);
+        assertThat(duplicate.duplicate()).isTrue();
+        assertThat(duplicate.documentId()).isEqualTo(imported.documentId());
+        assertThat(knowledgeMapper.findDocumentIdentity("KD-IMPORT-001", "2026.1").status())
+                .isEqualTo("DRAFT");
+        assertThat(knowledgeMapper.searchPublished("导入测试", "MICRO_BUSINESS", "ALL", 3)).isEmpty();
+
+        assertThatThrownBy(() -> knowledgeImportService.importMarkdownDraft(
+                draftKnowledgeMarkdown("同版本被修改的草稿内容。")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("提升版本号");
+        assertThat(knowledgeMapper.countChunks(imported.documentId())).isEqualTo(2);
+    }
+
+    @Test
+    void knowledgePublicationRequiresApprovalAndExpirationRemovesEvidence() {
+        knowledgeImportService.importMarkdownDraft(publicationKnowledgeMarkdown());
+
+        assertThatThrownBy(() -> knowledgePublicationService.publish("KD-PUBLISH-001", "2026.1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DRAFT");
+        assertThat(knowledgeMapper.searchPublished("发布测试", "MICRO_BUSINESS", "ALL", 3)).isEmpty();
+
+        KnowledgeDocumentIdentity approved = knowledgePublicationService.approve(
+                "KD-PUBLISH-001", "2026.1", " compliance-reviewer ");
+        assertThat(approved.status()).isEqualTo("APPROVED");
+        assertThat(approved.reviewer()).isEqualTo("compliance-reviewer");
+        assertThat(approved.approvedAt()).isNotNull();
+        assertThat(knowledgeMapper.searchPublished("发布测试", "MICRO_BUSINESS", "ALL", 3)).isEmpty();
+
+        KnowledgeDocumentIdentity published = knowledgePublicationService.publish("KD-PUBLISH-001", "2026.1");
+        assertThat(published.status()).isEqualTo("PUBLISHED");
+        assertThat(published.publishedAt()).isNotNull();
+        assertThat(knowledgeMapper.searchPublished("发布测试", "MICRO_BUSINESS", "ALL", 3))
+                .extracting(KnowledgeEvidence::documentId)
+                .containsOnly("KD-PUBLISH-001");
+
+        KnowledgeDocumentIdentity expired = knowledgePublicationService.expire("KD-PUBLISH-001", "2026.1");
+        assertThat(expired.status()).isEqualTo("EXPIRED");
+        assertThat(expired.expiredAt()).isNotNull();
+        assertThat(knowledgeMapper.searchPublished("发布测试", "MICRO_BUSINESS", "ALL", 3)).isEmpty();
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersApplicationThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 
@@ -576,6 +638,49 @@ class ChatVerticalSliceIntegrationTest {
 
     private String unitVectorLiteral(int dimensions) {
         return "[1" + ",0".repeat(dimensions - 1) + "]";
+    }
+
+    private String draftKnowledgeMarkdown(String content) {
+        return """
+                ---
+                documentNo: KD-IMPORT-001
+                title: 经营贷导入测试
+                productCode: MICRO_BUSINESS
+                region: ALL
+                version: 2026.1
+                audience: PUBLIC
+                effectiveFrom: 2026-09-01
+                effectiveTo:
+                reviewer: integration-test
+                keywords: 经营贷, 导入测试
+                ---
+                # 经营贷导入测试
+                ## 第一节
+                %s
+
+                ## 第二节
+                第二个切片用于验证事务写入。
+                """.formatted(content);
+    }
+
+    private String publicationKnowledgeMarkdown() {
+        return """
+                ---
+                documentNo: KD-PUBLISH-001
+                title: 经营贷发布流程测试
+                productCode: MICRO_BUSINESS
+                region: ALL
+                version: 2026.1
+                audience: PUBLIC
+                effectiveFrom: 2026-09-01
+                effectiveTo:
+                reviewer: draft-author
+                keywords: 经营贷, 发布测试
+                ---
+                # 经营贷发布流程测试
+                ## 对客说明
+                该内容仅在审核并发布后参与客户检索。
+                """;
     }
 
     private String stepUp(String loginToken) throws Exception {

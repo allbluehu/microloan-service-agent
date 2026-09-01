@@ -9,6 +9,57 @@ import org.apache.ibatis.annotations.Select;
 public interface KnowledgeMapper {
 
     @Select("""
+            INSERT INTO knowledge_document
+                (document_no, title, product_code, region, version, audience, status,
+                 effective_from, effective_to, reviewer, checksum)
+            VALUES
+                (#{document.documentNo}, #{document.title}, #{document.productCode}, #{document.region},
+                 #{document.version}, #{document.audience}, 'DRAFT', #{document.effectiveFrom},
+                 #{document.effectiveTo}, #{document.reviewer}, #{document.checksum})
+            ON CONFLICT (document_no, version) DO NOTHING
+            RETURNING id
+            """)
+    Long insertDraftDocument(@Param("document") KnowledgeMarkdownDocument document);
+
+    @Select("""
+            SELECT id, document_no, version, checksum, status, reviewer,
+                   approved_at, published_at, expired_at
+            FROM knowledge_document
+            WHERE document_no = #{documentNo} AND version = #{version}
+            """)
+    KnowledgeDocumentIdentity findDocumentIdentity(@Param("documentNo") String documentNo,
+                                                    @Param("version") String version);
+
+    @org.apache.ibatis.annotations.Insert("""
+            INSERT INTO knowledge_chunk
+                (document_id, chunk_no, section_path, content, search_text, checksum)
+            VALUES
+                (#{documentId}, #{chunk.chunkNo}, #{chunk.sectionPath}, #{chunk.content},
+                 #{chunk.searchText}, #{chunk.checksum})
+            """)
+    int insertChunk(@Param("documentId") long documentId, @Param("chunk") KnowledgeChunkDraft chunk);
+
+    @Select("SELECT COUNT(*) FROM knowledge_chunk WHERE document_id = #{documentId}")
+    int countChunks(@Param("documentId") long documentId);
+
+    @org.apache.ibatis.annotations.Update("""
+            UPDATE knowledge_document
+            SET status = #{nextStatus},
+                reviewer = COALESCE(#{reviewer}, reviewer),
+                approved_at = CASE WHEN #{nextStatus} = 'APPROVED' THEN CURRENT_TIMESTAMP ELSE approved_at END,
+                published_at = CASE WHEN #{nextStatus} = 'PUBLISHED' THEN CURRENT_TIMESTAMP ELSE published_at END,
+                expired_at = CASE WHEN #{nextStatus} = 'EXPIRED' THEN CURRENT_TIMESTAMP ELSE expired_at END
+            WHERE document_no = #{documentNo}
+              AND version = #{version}
+              AND status = #{expectedStatus}
+            """)
+    int transitionDocumentStatus(@Param("documentNo") String documentNo,
+                                 @Param("version") String version,
+                                 @Param("expectedStatus") String expectedStatus,
+                                 @Param("nextStatus") String nextStatus,
+                                 @Param("reviewer") String reviewer);
+
+    @Select("""
             <script>
             SELECT kd.document_no AS document_id, kc.chunk_no AS chunk_id, kd.title,
                    kc.section_path, kd.product_code, kd.version, kc.content,
