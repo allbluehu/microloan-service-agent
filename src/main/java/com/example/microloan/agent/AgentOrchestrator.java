@@ -62,6 +62,7 @@ public class AgentOrchestrator {
                 Intent.UNKNOWN, null, null);
         state = traceRisk(trace, state);
         if (state.riskLevel() == RiskLevel.HIGH) {
+            // 高风险接管先于普通意图分类，避免模型把投诉误路由到查询或营销知识。
             AgentState highRiskState = state.withIntent(Intent.HIGH_RISK_COMPLAINT);
             traceRoute(trace, highRiskState);
             return traceExecution(trace, highRiskState, () -> handoffHighRisk(highRiskState));

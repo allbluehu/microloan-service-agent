@@ -56,5 +56,14 @@ public class AgentTraceService {
         return safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
     }
 
-    public record TraceContext(String traceId, String sessionId, Long customerId, AtomicInteger sequence) {}
+    public record TraceContext(
+            /** 本轮 Agent 执行的追踪标识。 */
+            String traceId,
+            /** 当前对话会话标识。 */
+            String sessionId,
+            /** Trace 所属客户主键。 */
+            Long customerId,
+            /** 用于生成单调递增节点顺序的计数器。 */
+            AtomicInteger sequence
+    ) {}
 }

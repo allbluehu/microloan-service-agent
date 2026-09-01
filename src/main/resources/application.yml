@@ -8,6 +8,7 @@ spring:
   ai:
     model:
       chat: ${AI_CHAT_MODEL:none}
+      embedding: ${AI_EMBEDDING_MODEL:none}
     openai:
       api-key: ${OPENAI_API_KEY:unused-when-ai-disabled}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
@@ -15,6 +16,16 @@ spring:
         options:
           model: ${OPENAI_MODEL:gpt-4.1-mini}
           temperature: 0
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+          dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1024}
+
+knowledge:
+  vector:
+    enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
+    indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}
+    model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
 
 mybatis:
   configuration:

@@ -28,10 +28,15 @@ public class TicketController {
     }
 
     public record TicketRequest(
+            /** 发起工单的对话会话标识。 */
             @NotBlank String conversationId,
+            /** 工单业务类型。 */
             @NotNull TicketType type,
+            /** 关联贷款编号，可为空。 */
             String relatedLoanId,
+            /** 客户问题摘要。 */
             @NotBlank String summary,
+            /** 期望的处理优先级。 */
             @NotNull TicketPriority priority
     ) {}
 }

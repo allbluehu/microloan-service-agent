@@ -9,6 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.microloan.knowledge.KnowledgeAnswer;
+import com.example.microloan.knowledge.KnowledgeChunkForEmbedding;
+import com.example.microloan.knowledge.KnowledgeEvidence;
+import com.example.microloan.knowledge.KnowledgeMapper;
 import com.example.microloan.knowledge.KnowledgeService;
 import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
@@ -38,7 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class ChatVerticalSliceIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("pgvector/pgvector:pg16")
             .withDatabaseName("microloan")
             .withUsername("microloan")
             .withPassword("microloan");
@@ -61,6 +64,9 @@ class ChatVerticalSliceIntegrationTest {
 
     @Autowired
     private KnowledgeService knowledgeService;
+
+    @Autowired
+    private KnowledgeMapper knowledgeMapper;
 
     @Test
     void authenticatedCustomerCanCompleteTheNextRepaymentConversation() throws Exception {
@@ -344,6 +350,26 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void pgvectorQueryReturnsOnlyEligibleEmbeddedKnowledge() {
+        KnowledgeChunkForEmbedding materialChunk = knowledgeMapper
+                .findChunksRequiringEmbedding("test-embedding")
+                .stream()
+                .filter(chunk -> chunk.content().contains("营业执照"))
+                .findFirst()
+                .orElseThrow();
+        String vector = unitVectorLiteral(1024);
+        knowledgeMapper.updateEmbedding(materialChunk.id(), vector, "test-embedding");
+
+        List<KnowledgeEvidence> result = knowledgeMapper.searchPublishedByVector(
+                vector, "MICRO_BUSINESS", "ALL", 3);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().documentId()).isEqualTo("KD-MB-001");
+        assertThat(result.getFirst().chunkId()).isEqualTo("KC-MB-001");
+        assertThat(result.getFirst().score()).isEqualTo(1.0);
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersApplicationThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 
@@ -546,6 +572,10 @@ class ChatVerticalSliceIntegrationTest {
     private String nullableText(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private String unitVectorLiteral(int dimensions) {
+        return "[1" + ",0".repeat(dimensions - 1) + "]";
     }
 
     private String stepUp(String loginToken) throws Exception {

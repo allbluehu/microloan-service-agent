@@ -50,9 +50,24 @@ public class AuthController {
         return new LoginResponse(jwtService.issueStepUp(customer.id(), customer.customerNo()), "Bearer", 300);
     }
 
-    public record LoginRequest(@NotBlank String customerNo, @NotBlank String password) {}
+    public record LoginRequest(
+            /** 登录客户编号。 */
+            @NotBlank String customerNo,
+            /** 登录明文密码，仅用于本次校验。 */
+            @NotBlank String password
+    ) {}
 
-    public record StepUpRequest(@NotBlank String password) {}
+    public record StepUpRequest(
+            /** 二次认证明文密码，仅用于本次校验。 */
+            @NotBlank String password
+    ) {}
 
-    public record LoginResponse(String accessToken, String tokenType, long expiresIn) {}
+    public record LoginResponse(
+            /** 签发的 JWT 访问令牌。 */
+            String accessToken,
+            /** Authorization 请求头使用的令牌类型。 */
+            String tokenType,
+            /** 令牌有效期，单位为秒。 */
+            long expiresIn
+    ) {}
 }

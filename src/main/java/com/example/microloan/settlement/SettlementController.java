@@ -29,5 +29,8 @@ public class SettlementController {
                 request.settlementDate());
     }
 
-    public record SettlementRequest(@NotNull LocalDate settlementDate) {}
+    public record SettlementRequest(
+            /** 客户期望办理提前结清的日期。 */
+            @NotNull LocalDate settlementDate
+    ) {}
 }
