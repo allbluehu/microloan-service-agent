@@ -2,6 +2,7 @@ package com.example.microloan.agent;
 
 import com.example.microloan.agent.trace.AgentTraceService;
 import com.example.microloan.agent.trace.AgentTraceService.TraceContext;
+import com.example.microloan.api.RequestTraceContext;
 import com.example.microloan.application.ApplicationStatus;
 import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.knowledge.KnowledgeAnswer;
@@ -16,7 +17,6 @@ import com.example.microloan.ticket.ServiceTicket;
 import com.example.microloan.ticket.TicketPriority;
 import com.example.microloan.ticket.TicketType;
 import java.time.LocalDate;
-import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -64,7 +64,8 @@ public class AgentOrchestrator {
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,
                              String selectedApplicationId, String selectedProductCode, String selectedRegion,
                              LocalDate settlementDate) {
-        String traceId = UUID.randomUUID().toString();
+        // HTTP 入口复用请求级 traceId，使响应头、日志、Agent Trace 和聊天记录可按同一标识关联。
+        String traceId = RequestTraceContext.currentOrCreate();
         // 客户身份只取自服务端安全上下文，禁止使用请求或模型生成的客户标识。
         CustomerPrincipal principal = authenticatedPrincipal();
         // 先校验会话归属并合并本轮显式选择，使后续节点使用同一份已持久化上下文快照。

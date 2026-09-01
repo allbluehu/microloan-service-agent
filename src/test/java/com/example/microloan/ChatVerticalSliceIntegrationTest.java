@@ -358,16 +358,44 @@ class ChatVerticalSliceIntegrationTest {
 
     @Test
     void protectedBusinessApiRequiresAuthentication() throws Exception {
-        mockMvc.perform(get("/api/v1/loans/L10001/next-repayment"))
+        MvcResult result = mockMvc.perform(get("/api/v1/loans/L10001/next-repayment"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
                 .andExpect(jsonPath("$.message").value("需要登录后访问"))
-                .andExpect(jsonPath("$.traceId").isNotEmpty());
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andReturn();
+
+        JsonNode error = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(result.getResponse().getHeader("X-Trace-Id")).isEqualTo(error.path("traceId").asText());
 
         mockMvc.perform(get("/api/v1/loans/L10001/next-repayment")
                         .header("Authorization", "Bearer malformed-token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    @Test
+    void chatResponseReusesRequestTraceIdAcrossHeaderBodyAndPersistedTrace() throws Exception {
+        String token = login("C10001");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/chat/sessions/S-HTTP-TRACE/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "messageId": "M-HTTP-TRACE",
+                                  "content": "查询下一期账单",
+                                  "selectedLoanId": "L10001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+        String traceId = response.path("traceId").asText();
+        assertThat(result.getResponse().getHeader("X-Trace-Id")).isEqualTo(traceId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agent_trace WHERE trace_id = ?", Integer.class, traceId)).isEqualTo(4);
     }
 
     @Test

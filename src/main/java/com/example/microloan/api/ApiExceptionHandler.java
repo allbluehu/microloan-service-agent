@@ -4,7 +4,6 @@ import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.agent.ToolUnavailableException;
 import com.example.microloan.repayment.LoanAccessDeniedException;
 import com.example.microloan.settlement.StepUpAuthRequiredException;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -53,6 +52,8 @@ public class ApiExceptionHandler {
     }
 
     private ResponseEntity<ApiError> problem(HttpStatus status, String code, String message) {
-        return ResponseEntity.status(status).body(new ApiError(code, message, UUID.randomUUID().toString()));
+        // 复用请求级标识，使错误响应、响应头和同一请求日志能够直接关联。
+        return ResponseEntity.status(status).body(new ApiError(
+                code, message, RequestTraceContext.currentOrCreate()));
     }
 }
