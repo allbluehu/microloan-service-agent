@@ -2,7 +2,6 @@ package com.example.microloan.agent;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.ClassPathResource;
@@ -25,29 +24,32 @@ public class IntentClassifier {
         ChatModel model = chatModelProvider.getIfAvailable();
         if (model != null) {
             try {
-                String output = model.call(renderPrompt(message)).trim().toUpperCase(Locale.ROOT);
-                // Match the more specific known labels instead of accepting arbitrary model prose as routing data.
-                if (output.contains("APPLICATION_STATUS_QUERY")) {
-                    return Intent.APPLICATION_STATUS_QUERY;
+                Intent parsed = parseModelOutput(model.call(renderPrompt(message)));
+                if (parsed != null) {
+                    return parsed;
                 }
-                if (output.contains("PAYMENT_RECORDS_QUERY")) {
-                    return Intent.PAYMENT_RECORDS_QUERY;
-                }
-                if (output.contains("EARLY_SETTLEMENT_QUOTE")) {
-                    return Intent.EARLY_SETTLEMENT_QUOTE;
-                }
-                if (output.contains("HUMAN_HANDOFF")) {
-                    return Intent.HUMAN_HANDOFF;
-                }
-                if (output.contains("KNOWLEDGE_QUERY")) {
-                    return Intent.KNOWLEDGE_QUERY;
-                }
-                return output.contains("NEXT_REPAYMENT_QUERY") ? Intent.NEXT_REPAYMENT_QUERY : Intent.UNKNOWN;
             } catch (RuntimeException ignored) {
                 // Classification can safely degrade to narrow rules; business facts never come from this fallback.
             }
         }
         return ruleFallback(message);
+    }
+
+    Intent parseModelOutput(String output) {
+        if (output == null) {
+            return null;
+        }
+        // 仅接受协议内的完整标签，避免解释性文本或提示词注入片段成为路由指令。
+        return switch (output.trim()) {
+            case "NEXT_REPAYMENT_QUERY" -> Intent.NEXT_REPAYMENT_QUERY;
+            case "APPLICATION_STATUS_QUERY" -> Intent.APPLICATION_STATUS_QUERY;
+            case "PAYMENT_RECORDS_QUERY" -> Intent.PAYMENT_RECORDS_QUERY;
+            case "EARLY_SETTLEMENT_QUOTE" -> Intent.EARLY_SETTLEMENT_QUOTE;
+            case "HUMAN_HANDOFF" -> Intent.HUMAN_HANDOFF;
+            case "KNOWLEDGE_QUERY" -> Intent.KNOWLEDGE_QUERY;
+            case "UNKNOWN" -> Intent.UNKNOWN;
+            default -> null;
+        };
     }
 
     String renderPrompt(String message) {

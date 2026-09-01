@@ -56,4 +56,15 @@ class IntentClassifierTest {
         assertThat(classifier.renderPrompt("测试问题"))
                 .contains("只输出以下一个标签", "用户输入：测试问题");
     }
+
+    @Test
+    void acceptsAnExactModelLabel() {
+        assertThat(classifier.parseModelOutput("PAYMENT_RECORDS_QUERY"))
+                .isEqualTo(Intent.PAYMENT_RECORDS_QUERY);
+    }
+
+    @Test
+    void rejectsExplanatoryModelText() {
+        assertThat(classifier.parseModelOutput("这不是 HUMAN_HANDOFF")).isNull();
+    }
 }
