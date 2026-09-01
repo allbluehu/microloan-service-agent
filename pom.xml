@@ -23,6 +23,7 @@
         <mybatis.version>3.0.5</mybatis.version>
         <jjwt.version>0.12.6</jjwt.version>
         <testcontainers.version>1.21.3</testcontainers.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencyManagement>
@@ -82,6 +83,11 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

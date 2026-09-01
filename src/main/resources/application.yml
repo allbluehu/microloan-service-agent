@@ -24,6 +24,8 @@ spring:
 knowledge:
   ingestion:
     chunk-max-characters: ${KNOWLEDGE_CHUNK_MAX_CHARACTERS:800}
+    pdf-max-bytes: ${KNOWLEDGE_PDF_MAX_BYTES:10485760}
+    pdf-max-pages: ${KNOWLEDGE_PDF_MAX_PAGES:100}
   vector:
     enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
     indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}

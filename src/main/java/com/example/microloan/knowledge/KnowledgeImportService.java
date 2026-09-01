@@ -9,19 +9,30 @@ public class KnowledgeImportService {
 
     private final KnowledgeMarkdownParser markdownParser;
     private final KnowledgeMarkdownChunker markdownChunker;
+    private final KnowledgePdfParser pdfParser;
     private final KnowledgeMapper knowledgeMapper;
 
     public KnowledgeImportService(KnowledgeMarkdownParser markdownParser,
                                   KnowledgeMarkdownChunker markdownChunker,
+                                  KnowledgePdfParser pdfParser,
                                   KnowledgeMapper knowledgeMapper) {
         this.markdownParser = markdownParser;
         this.markdownChunker = markdownChunker;
+        this.pdfParser = pdfParser;
         this.knowledgeMapper = knowledgeMapper;
     }
 
     @Transactional
     public KnowledgeImportResult importMarkdownDraft(String markdown) {
-        KnowledgeMarkdownDocument document = markdownParser.parse(markdown);
+        return importDraft(markdownParser.parse(markdown));
+    }
+
+    @Transactional
+    public KnowledgeImportResult importPdfDraft(String filename, byte[] content, KnowledgePdfMetadata metadata) {
+        return importDraft(pdfParser.parse(filename, content, metadata));
+    }
+
+    private KnowledgeImportResult importDraft(KnowledgeMarkdownDocument document) {
         List<KnowledgeChunkDraft> chunks = markdownChunker.chunk(document);
 
         Long documentId = knowledgeMapper.insertDraftDocument(document);
