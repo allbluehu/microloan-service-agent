@@ -152,7 +152,8 @@ CREATE TABLE chat_message (
     intent VARCHAR(50),                                   -- Assistant 消息对应的最终意图
     trace_id VARCHAR(64),                                 -- Assistant 消息对应的 Agent Trace 标识
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 消息创建时间
-    CONSTRAINT ck_chat_message_role CHECK (role IN ('USER', 'ASSISTANT')) -- 限制受控消息角色
+    CONSTRAINT ck_chat_message_role CHECK (role IN ('USER', 'ASSISTANT')), -- 限制受控消息角色
+    CONSTRAINT uk_chat_message_identity UNIQUE (session_id, message_id, role) -- 同一会话内的角色消息不可重复
 );
 
 CREATE INDEX idx_chat_session_customer ON chat_session(customer_id, updated_at DESC);
@@ -359,6 +360,7 @@ COMMENT ON COLUMN chat_message.intent IS 'Assistant 消息对应的最终意图'
 COMMENT ON COLUMN chat_message.trace_id IS 'Assistant 消息对应的 Agent Trace 标识';
 COMMENT ON COLUMN chat_message.created_at IS '消息创建时间';
 COMMENT ON CONSTRAINT ck_chat_message_role ON chat_message IS '限制消息角色为 USER 或 ASSISTANT';
+COMMENT ON CONSTRAINT uk_chat_message_identity ON chat_message IS '同一会话内相同消息标识和角色只允许写入一次';
 
 COMMENT ON TABLE agent_trace IS 'Agent 节点级执行追踪与审计记录';
 COMMENT ON COLUMN agent_trace.id IS 'Trace 记录数据库主键';

@@ -27,12 +27,13 @@ public class ChatHistoryService {
                 blankToNull(selectedProductCode), blankToNull(selectedRegion));
         ChatSessionContext updated = mapper.findOwnedSessionContext(sessionId, customerId);
         mapper.insertMessage(updated.id(), messageId, "USER", sanitize(content), null, null);
+        // 重复请求继续走确定性编排以复用业务工具结果，但唯一约束阻止聊天记录重复增长。
         return updated;
     }
 
     public void recordAssistantMessage(Long sessionDbId, String messageId, AgentState state) {
-        mapper.insertMessage(sessionDbId, messageId + ":assistant", "ASSISTANT", sanitize(state.finalAnswer()),
-                state.intent().name(), state.traceId());
+        mapper.insertMessage(sessionDbId, messageId + ":assistant", "ASSISTANT",
+                sanitize(state.finalAnswer()), state.intent().name(), state.traceId());
         mapper.touchSession(sessionDbId);
     }
 

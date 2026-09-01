@@ -220,6 +220,37 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void duplicateClientMessageIdReusesBusinessFlowWithoutDuplicatePersistence() throws Exception {
+        String token = login("C10001");
+        String request = """
+                {
+                  "messageId": "M-IDEMPOTENT-1",
+                  "content": "下一期账单是多少？",
+                  "selectedLoanId": "L10001"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/chat/sessions/S-IDEMPOTENT-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/chat/sessions/S-IDEMPOTENT-1/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessCard.loanId").value("L10001"));
+
+        Integer messageCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM chat_message m
+                JOIN chat_session s ON s.id = m.session_id
+                WHERE s.session_id = 'S-IDEMPOTENT-1'
+                """, Integer.class);
+        assertThat(messageCount).isEqualTo(2);
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersLoanThroughApiOrAgent() throws Exception {
         String token = login("C10001");
 

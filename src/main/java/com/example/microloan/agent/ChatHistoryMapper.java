@@ -35,10 +35,14 @@ public interface ChatHistoryMapper {
                        @Param("selectedProductCode") String selectedProductCode,
                        @Param("selectedRegion") String selectedRegion);
 
-    @Insert("INSERT INTO chat_message (session_id, message_id, role, content, intent, trace_id) VALUES (#{sessionDbId}, #{messageId}, #{role}, #{content}, #{intent}, #{traceId})")
-    void insertMessage(@Param("sessionDbId") Long sessionDbId, @Param("messageId") String messageId,
-                       @Param("role") String role, @Param("content") String content,
-                       @Param("intent") String intent, @Param("traceId") String traceId);
+    @Insert("""
+            INSERT INTO chat_message (session_id, message_id, role, content, intent, trace_id)
+            VALUES (#{sessionDbId}, #{messageId}, #{role}, #{content}, #{intent}, #{traceId})
+            ON CONFLICT (session_id, message_id, role) DO NOTHING
+            """)
+    int insertMessage(@Param("sessionDbId") Long sessionDbId, @Param("messageId") String messageId,
+                      @Param("role") String role, @Param("content") String content,
+                      @Param("intent") String intent, @Param("traceId") String traceId);
 
     @Update("UPDATE chat_session SET updated_at = CURRENT_TIMESTAMP WHERE id = #{sessionDbId}")
     void touchSession(@Param("sessionDbId") Long sessionDbId);
