@@ -47,6 +47,9 @@ agent:
   model-call:
     # 覆盖 Spring AI 内部有限重试在内的整次分类调用预算。
     timeout: ${AI_MODEL_CALL_TIMEOUT:3s}
+    circuit-breaker:
+      failure-threshold: ${AI_CIRCUIT_FAILURE_THRESHOLD:3}
+      open-duration: ${AI_CIRCUIT_OPEN_DURATION:30s}
 
 mybatis:
   configuration:
