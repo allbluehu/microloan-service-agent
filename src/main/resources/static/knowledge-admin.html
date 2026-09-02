@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微贷知识管理台</title>
+  <style>
+    :root { color-scheme:light; --ink:#18231f; --muted:#68756f; --line:#dce5df; --brand:#176b4d; --soft:#edf7f2; --warn:#9b6425; --bad:#a33a31; }
+    * { box-sizing:border-box; } body { margin:0; font:14px/1.55 system-ui,-apple-system,"PingFang SC",sans-serif; color:var(--ink); background:linear-gradient(145deg,#edf6f0,#f7f2e8); }
+    button,input,textarea,select { font:inherit; } .shell { max-width:1280px; margin:auto; padding:26px; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:end; margin-bottom:18px; } h1 { margin:0; font-size:25px; } h2 { margin:0 0 13px; font-size:17px; }
+    .sub,.hint { color:var(--muted); } .grid { display:grid; grid-template-columns:1.25fr .75fr; gap:18px; } .stack { display:grid; gap:18px; align-content:start; }
+    .card { background:rgba(255,255,255,.94); border:1px solid rgba(255,255,255,.8); border-radius:18px; padding:20px; box-shadow:0 14px 38px rgba(31,61,48,.08); }
+    label { display:block; margin:10px 0 5px; font-size:12px; color:var(--muted); } input,textarea,select { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; background:#fff; outline:none; }
+    textarea { min-height:280px; resize:vertical; font-family:ui-monospace,SFMono-Regular,monospace; font-size:12px; } input:focus,textarea:focus,select:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(23,107,77,.1); }
+    button { border:0; border-radius:9px; padding:9px 14px; background:var(--brand); color:#fff; font-weight:650; cursor:pointer; } button.secondary { color:var(--brand); background:var(--soft); } button.warn { background:var(--warn); } button:disabled { opacity:.55; cursor:not-allowed; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; } .key { display:grid; grid-template-columns:1fr auto; gap:9px; align-items:end; }
+    .status { min-height:22px; margin-top:10px; color:var(--muted); } .status.error { color:var(--bad); } pre { max-height:360px; overflow:auto; margin:0; padding:14px; border-radius:11px; background:#14231d; color:#d9eee5; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    @media(max-width:820px) { .grid { grid-template-columns:1fr; } header { align-items:start; flex-direction:column; } .row { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header><div><h1>知识管理台</h1><div class="sub">导入草稿、审批发布、下线及向量补建</div></div><a href="/chat.html">前往对话测试台</a></header>
+  <section class="card" style="margin-bottom:18px">
+    <div class="key"><div><label for="adminKey">知识管理员密钥</label><input id="adminKey" type="password" autocomplete="off" placeholder="X-Knowledge-Admin-Key（至少 32 字节）"></div><button id="saveKey" class="secondary">保存到当前标签页</button></div>
+    <div class="hint">密钥仅写入 sessionStorage，关闭标签页后由浏览器清除；请勿在共享设备保存生产密钥。</div>
+  </section>
+  <div class="grid">
+    <div class="stack">
+      <section class="card"><h2>Markdown 草稿导入</h2><textarea id="markdown">---
+documentNo: KB-WEB-DEMO
+title: 管理台演示知识
+productCode: MICRO_BUSINESS
+region: ALL
+version: 2026.1
+audience: CUSTOMER
+effectiveFrom: 2026-01-01
+keywords: [演示, 管理台]
+reviewer: draft-author
+---
+# 演示说明
+这是通过知识管理台导入的演示内容。</textarea><div class="actions"><button data-action="importMarkdown">导入 Markdown 草稿</button></div></section>
+      <section class="card"><h2>PDF 草稿导入</h2><input id="pdfFile" type="file" accept="application/pdf,.pdf"><div class="row"><div><label for="pdfDocumentNo">文档编号</label><input id="pdfDocumentNo"></div><div><label for="pdfVersion">版本</label><input id="pdfVersion" value="2026.1"></div></div><div class="row"><div><label for="pdfTitle">标题</label><input id="pdfTitle"></div><div><label for="pdfProduct">产品编码</label><input id="pdfProduct" value="MICRO_BUSINESS"></div></div><div class="row"><div><label for="pdfRegion">地区</label><input id="pdfRegion" value="ALL"></div><div><label for="pdfAudience">受众</label><select id="pdfAudience"><option>CUSTOMER</option><option>PUBLIC</option><option>INTERNAL</option></select></div></div><label for="pdfKeywords">关键词（逗号分隔）</label><input id="pdfKeywords"><div class="actions"><button data-action="importPdf">导入 PDF 草稿</button></div></section>
+    </div>
+    <div class="stack">
+      <section class="card"><h2>版本治理</h2><label for="documentNo">文档编号</label><input id="documentNo" value="KB-WEB-DEMO"><label for="version">版本</label><input id="version" value="2026.1"><label for="reviewer">审核人</label><input id="reviewer" value="knowledge-reviewer"><div class="actions"><button data-action="approve">审批</button><button data-action="publish">发布</button><button data-action="expire" class="warn">下线</button></div><div class="hint">状态迁移固定为 DRAFT → APPROVED → PUBLISHED → EXPIRED。</div></section>
+      <section class="card"><h2>向量索引</h2><div class="hint">补建缺失或模型版本过旧的切片；供应商限流或中断后可以安全重试。</div><div class="actions"><button data-action="index">执行增量索引</button></div></section>
+      <section class="card"><h2>操作结果</h2><pre id="result">等待操作……</pre><div id="status" class="status"></div></section>
+    </div>
+  </div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const adminKey = () => $("adminKey").value.trim();
+  $("adminKey").value = sessionStorage.getItem("knowledgeAdminKey") || "";
+  $("saveKey").onclick = () => { sessionStorage.setItem("knowledgeAdminKey", adminKey()); show({ message:"密钥已保存到当前标签页" }); };
+  function show(value, error=false) { $("result").textContent=JSON.stringify(value,null,2); $("status").textContent=error ? (value.message || "请求失败") : "操作成功"; $("status").classList.toggle("error",error); }
+  async function request(path, options={}) {
+    if (!adminKey()) throw new Error("请先填写管理员密钥");
+    const response=await fetch(path,{...options,headers:{"X-Knowledge-Admin-Key":adminKey(),...options.headers}});
+    const body=await response.json().catch(()=>({message:`HTTP ${response.status}`}));
+    if(!response.ok) throw Object.assign(new Error(body.message||`HTTP ${response.status}`),{body}); return body;
+  }
+  const identity=()=>({documentNo:$("documentNo").value.trim(),version:$("version").value.trim()});
+  const encodedIdentity=()=>{const x=identity(); if(!x.documentNo||!x.version) throw new Error("请填写文档编号和版本"); return `${encodeURIComponent(x.documentNo)}/versions/${encodeURIComponent(x.version)}`;};
+  const actions={
+    importMarkdown:()=>request("/api/v1/admin/knowledge/documents/markdown",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({markdown:$("markdown").value})}),
+    importPdf:()=>{const file=$("pdfFile").files[0]; if(!file) throw new Error("请选择 PDF 文件"); const data=new FormData(); data.append("file",file); data.append("metadata",new Blob([JSON.stringify({documentNo:$("pdfDocumentNo").value.trim(),title:$("pdfTitle").value.trim(),productCode:$("pdfProduct").value.trim(),region:$("pdfRegion").value.trim(),version:$("pdfVersion").value.trim(),audience:$("pdfAudience").value,effectiveFrom:null,effectiveTo:null,keywords:$("pdfKeywords").value.split(",").map(x=>x.trim()).filter(Boolean)})],{type:"application/json"})); return request("/api/v1/admin/knowledge/documents/pdf",{method:"POST",body:data});},
+    approve:()=>request(`/api/v1/admin/knowledge/documents/${encodedIdentity()}/approve`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reviewer:$("reviewer").value.trim()})}),
+    publish:()=>request(`/api/v1/admin/knowledge/documents/${encodedIdentity()}/publish`,{method:"POST"}), expire:()=>request(`/api/v1/admin/knowledge/documents/${encodedIdentity()}/expire`,{method:"POST"}), index:()=>request("/api/v1/admin/knowledge/embeddings/index",{method:"POST"})
+  };
+  document.querySelectorAll("[data-action]").forEach(button=>button.onclick=async()=>{button.disabled=true; $("status").textContent="处理中……"; try{const value=await actions[button.dataset.action](); show(value); if(value.documentNo){$("documentNo").value=value.documentNo; $("version").value=value.version;}}catch(error){show(error.body||{message:error.message},true);}finally{button.disabled=false;}});
+</script>
+</body>
+</html>

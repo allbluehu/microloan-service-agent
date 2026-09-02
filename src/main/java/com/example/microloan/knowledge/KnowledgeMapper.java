@@ -6,6 +6,13 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 @Mapper
+/**
+ * 知识库持久化与召回边界。
+ *
+ * <p>写链由导入、发布和索引 Service 调用；读链由 {@link KnowledgeRetriever} 调用。客户召回的安全过滤
+ * 固化在 {@link #searchPublished} 与 {@link #searchPublishedByVector} SQL 中，而不是只依赖 Java 调用方，
+ * 以确保未发布、内部、过期或产品/地区不匹配的内容无法被上层误取。</p>
+ */
 public interface KnowledgeMapper {
 
     @Select("""

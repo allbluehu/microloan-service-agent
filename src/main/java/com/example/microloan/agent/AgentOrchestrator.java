@@ -23,6 +23,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+/**
+ * 对话应用层编排器，负责确定节点顺序和路由边界，但不实现贷款、支付等领域规则。
+ *
+ * <p>入口为 {@link #handle}。所有外部输入先绑定认证客户与会话，再经过风险、意图、路由、执行和持久化；
+ * 每个阶段同步写入 Agent Trace。业务动作由本类显式选择后调用对应 Tools 包装器，Tools 不是模型函数。</p>
+ */
 public class AgentOrchestrator {
 
     private final IntentClassifier intentClassifier;
@@ -59,6 +65,16 @@ public class AgentOrchestrator {
     /**
      * 执行一轮完整对话：固化会话上下文，依次完成风险识别、意图识别、受控路由和结果持久化。
      * 高风险规则优先于模型意图；模型仅能返回协议内意图，不能直接选择或传入任意业务方法。
+     *
+     * @param sessionId 客户端会话标识，服务端会结合当前客户校验归属
+     * @param messageId 客户端消息幂等标识，用于避免重复保存对话消息
+     * @param content 客户自然语言输入，进入模型前还会统一脱敏和限长
+     * @param selectedLoanId 本轮显式选择的贷款编号；为空时可复用已保存的会话槽位
+     * @param selectedApplicationId 本轮显式选择的申请编号
+     * @param selectedProductCode 本轮显式选择的知识产品编码
+     * @param selectedRegion 本轮显式选择的知识地区编码
+     * @param settlementDate 提前结清试算日期，仅相应意图使用
+     * @return 包含最终意图、结构化业务结果、客户答案和 traceId 的不可变状态
      */
     @Transactional
     public AgentState handle(String sessionId, String messageId, String content, String selectedLoanId,

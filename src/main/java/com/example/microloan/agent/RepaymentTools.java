@@ -7,6 +7,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 编排器与还款领域服务之间的窄适配层。
+ * 仅由 AgentOrchestrator 的 NEXT_REPAYMENT_QUERY 白名单分支调用；贷款归属校验仍由 RepaymentService 执行。
+ */
 public class RepaymentTools {
 
     private final RepaymentService repaymentService;
@@ -15,6 +19,7 @@ public class RepaymentTools {
         this.repaymentService = repaymentService;
     }
 
+    /** 查询认证客户所选贷款的下一期计划，不接受模型提供客户身份。 */
     public NextRepaymentPlan getNextRepaymentPlan(String loanId) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (!(principal instanceof CustomerPrincipal customer)) {

@@ -56,3 +56,6 @@ KNOWLEDGE_ADMIN_API_KEY=请替换为高强度随机值
 调用时携带 `X-Knowledge-Admin-Key`。管理流程固定为“导入 DRAFT → 审批 APPROVED → 发布 PUBLISHED →
 按需补建向量”；详细接口见 [接口与数据模型](docs/04-接口与数据模型.md)。向量入口要求
 `AI_EMBEDDING_MODEL=openai`，返回的 `indexedChunkCount` 为本次实际补建数量，重复执行时只处理缺失或旧模型切片。
+
+服务启动后可访问 `http://localhost:8080/knowledge-admin.html` 使用知识管理台。页面支持 Markdown/PDF
+草稿导入、审批、发布、下线和增量向量索引；管理密钥只保存在当前浏览器标签页的 `sessionStorage` 中。

@@ -25,7 +25,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // 登录入口、人工测试页及容器探针需要在没有客户 JWT 时可访问；业务 API 仍统一鉴权。
-                        .requestMatchers("/api/v1/auth/login", "/chat.html",
+                        .requestMatchers("/api/v1/auth/login", "/chat.html", "/knowledge-admin.html",
                                 "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/v1/admin/knowledge/**").hasRole("KNOWLEDGE_ADMIN")
                         .anyRequest().authenticated())

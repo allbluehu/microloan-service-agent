@@ -10,6 +10,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 知识召回编排器：全文检索是稳定基线，向量检索是可关闭的增强路径。
+ *
+ * <p>两路查询都由 {@link KnowledgeMapper} 在数据库层执行相同的发布、受众、生效期、产品和地区过滤；
+ * 启用向量后使用 RRF 融合异构分数，最后通过 {@link KnowledgeReranker} 做确定性词项覆盖重排。</p>
+ */
 public class KnowledgeRetriever {
 
     private static final int EMBEDDING_DIMENSIONS = 1024;
@@ -32,6 +38,12 @@ public class KnowledgeRetriever {
         this.reranker = reranker;
     }
 
+    /**
+     * 执行一次受元数据约束的召回。
+     *
+     * @param query 已规范化的查询，不能使用未经校验的任意过滤表达式
+     * @return 最多三个重排后的可引用知识切片
+     */
     public List<KnowledgeEvidence> retrieve(KnowledgeQuery query) {
         List<KnowledgeEvidence> fullText = knowledgeMapper.searchPublished(
                 query.searchText(), query.productCode(), query.region(), CANDIDATE_LIMIT);

@@ -3,6 +3,7 @@ package com.example.microloan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,6 +43,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.mock.web.MockMultipartFile;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -824,6 +826,100 @@ class ChatVerticalSliceIntegrationTest {
                         .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("向量模型未启用")));
+    }
+
+    /**
+     * 验证管理页面本身可以匿名加载，但任何数据操作仍必须通过独立管理密钥。
+     * 调用链为“静态资源放行 → 管理页携带请求头 → KnowledgeAdminAuthenticationFilter → Controller”。
+     */
+    @Test
+    void knowledgeAdminPageIsPublicButApiRejectsWrongCredential() throws Exception {
+        mockMvc.perform(get("/knowledge-admin.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("X-Knowledge-Admin-Key")));
+
+        mockMvc.perform(post("/api/v1/admin/knowledge/embeddings/index")
+                        .header("X-Knowledge-Admin-Key", "wrong-admin-key"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    /**
+     * 覆盖管理 API 的参数校验、导入幂等和版本不可覆盖约束；冲突应返回稳定的 409 契约而非内部错误。
+     */
+    @Test
+    void knowledgeAdminApiValidatesInputAndReportsVersionConflict() throws Exception {
+        String path = "/api/v1/admin/knowledge/documents/markdown";
+        String key = "test-knowledge-admin-key-32-bytes!!";
+
+        mockMvc.perform(post(path).header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"markdown\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        String markdown = adminKnowledgeMarkdown().replace("KD-ADMIN-001", "KD-ADMIN-IDEMPOTENT");
+        String body = objectMapper.writeValueAsString(Map.of("markdown", markdown));
+        mockMvc.perform(post(path).header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.duplicate").value(false));
+        mockMvc.perform(post(path).header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.duplicate").value(true));
+
+        String changed = objectMapper.writeValueAsString(Map.of(
+                "markdown", markdown.replace("该内容必须经过独立管理员认证、审核和发布后才能参与召回。",
+                        "同版本正文已经被修改，禁止覆盖原草稿。")));
+        mockMvc.perform(post(path).header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content(changed))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STATE_CONFLICT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("提升版本号")));
+    }
+
+    /** 验证状态机拒绝跳级发布、重复审批和未发布下线，并保持当前数据库状态不变。 */
+    @Test
+    void knowledgeAdminApiRejectsIllegalPublicationTransitions() throws Exception {
+        String key = "test-knowledge-admin-key-32-bytes!!";
+        String markdown = adminKnowledgeMarkdown().replace("KD-ADMIN-001", "KD-ADMIN-STATE");
+        mockMvc.perform(post("/api/v1/admin/knowledge/documents/markdown")
+                        .header("X-Knowledge-Admin-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("markdown", markdown))))
+                .andExpect(status().isOk());
+
+        String base = "/api/v1/admin/knowledge/documents/KD-ADMIN-STATE/versions/2026.1";
+        mockMvc.perform(post(base + "/publish").header("X-Knowledge-Admin-Key", key))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+        mockMvc.perform(post(base + "/expire").header("X-Knowledge-Admin-Key", key))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+        mockMvc.perform(post(base + "/approve").header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reviewer\":\"reviewer-a\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
+        mockMvc.perform(post(base + "/approve").header("X-Knowledge-Admin-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reviewer\":\"reviewer-b\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+        assertThat(knowledgeMapper.findDocumentIdentity("KD-ADMIN-STATE", "2026.1").reviewer())
+                .isEqualTo("reviewer-a");
+    }
+
+    /** 验证 multipart 协议在进入 PDFBox 前拒绝空文件和缺失元数据，避免模糊的服务端异常。 */
+    @Test
+    void knowledgeAdminPdfApiRejectsEmptyFileAndMissingMetadata() throws Exception {
+        String key = "test-knowledge-admin-key-32-bytes!!";
+        MockMultipartFile emptyPdf = new MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]);
+        MockMultipartFile metadata = new MockMultipartFile("metadata", "", "application/json",
+                "{\"documentNo\":\"KD-PDF-API\",\"title\":\"PDF API\",\"productCode\":\"MICRO_BUSINESS\",\"region\":\"ALL\",\"version\":\"2026.1\",\"audience\":\"CUSTOMER\",\"keywords\":[\"PDF\"]}"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/v1/admin/knowledge/documents/pdf")
+                        .file(emptyPdf).file(metadata).header("X-Knowledge-Admin-Key", key))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+
+        MockMultipartFile content = new MockMultipartFile(
+                "file", "document.pdf", "application/pdf", "%PDF-invalid".getBytes());
+        mockMvc.perform(multipart("/api/v1/admin/knowledge/documents/pdf")
+                        .file(content).header("X-Knowledge-Admin-Key", key))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -7,6 +7,10 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 @Mapper
+/**
+ * 回答反馈持久化接口。
+ * 写入和读取均通过消息与会话关联校验 customerId，防止客户对其他人的消息提交或读取反馈。
+ */
 public interface ChatFeedbackMapper {
 
     @Select("""

@@ -10,6 +10,13 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 将客户文本收敛为协议内意图，并保证模型不可用或输出不可信时仍有确定性结果。
+ *
+ * <p>调用链为 AgentOrchestrator → {@link #classifyDetailed} → ChatModel（可选）→
+ * {@link ModelCallExecutor}。只有严格 JSON、合法枚举和不低于阈值的输出标记为 MODEL；其余所有情况均
+ * 回退到范围较窄的本地规则。高风险识别不在此处处理，而由编排器前置调用 RiskClassifier。</p>
+ */
 public class IntentClassifier {
 
     public static final String PROMPT_VERSION = "intent-v4";
@@ -33,6 +40,10 @@ public class IntentClassifier {
         return classifyDetailed(message).intent();
     }
 
+    /**
+     * 返回意图、置信度及来源，供路由和 Trace 同时使用。
+     * 模型异常会在此边界被吸收，因为意图分类失败可以安全降级且不提供任何业务事实。
+     */
     public ClassificationResult classifyDetailed(String message) {
         ChatModel model = chatModelProvider.getIfAvailable();
         if (model != null) {

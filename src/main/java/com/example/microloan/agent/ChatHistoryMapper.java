@@ -8,6 +8,10 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 @Mapper
+/**
+ * 会话与消息 SQL 边界，由 ChatHistoryService 独占调用。
+ * 所有读取方法必须同时使用 customerId 和业务标识限制归属，不能先按 sessionId 查询后在 Java 中过滤。
+ */
 public interface ChatHistoryMapper {
     @Insert("INSERT INTO chat_session (session_id, customer_id) VALUES (#{sessionId}, #{customerId}) ON CONFLICT (session_id) DO NOTHING")
     int createSessionIfAbsent(@Param("sessionId") String sessionId, @Param("customerId") Long customerId);

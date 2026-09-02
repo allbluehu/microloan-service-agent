@@ -17,6 +17,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 真实模型调用的统一可靠性边界。
+ *
+ * <p>调用方提交同步 Supplier，本类按“并发许可 → 熔断许可 → 虚拟线程执行 → 总超时”顺序控制调用，
+ * 并记录低基数指标。异常返回给 IntentClassifier，由分类器决定规则降级；本类不理解意图和业务数据。</p>
+ */
 public class ModelCallExecutor {
     private final Duration timeout;
     private final ModelCircuitBreaker circuitBreaker;
@@ -44,6 +50,11 @@ public class ModelCallExecutor {
                 new SimpleMeterRegistry());
     }
 
+    /**
+     * 在配置的总预算内执行一次模型调用。
+     *
+     * @throws RuntimeException 容量耗尽、熔断、超时或供应商调用失败；调用方不得将异常正文返回客户
+     */
     public String call(Supplier<String> invocation) {
         long startedAt = System.nanoTime();
         String outcome = "failure";

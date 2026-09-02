@@ -4,6 +4,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+/**
+ * 知识版本状态机服务。
+ *
+ * <p>每次迁移都把期望前置状态写入 UPDATE 条件，使状态检查和更新成为同一个数据库原子操作；并发请求
+ * 只有一个能够成功。服务不修改正文或切片，客户检索是否可见由 PUBLISHED 状态即时决定。</p>
+ */
 public class KnowledgePublicationService {
 
     private final KnowledgeMapper knowledgeMapper;
@@ -13,6 +19,7 @@ public class KnowledgePublicationService {
     }
 
     @Transactional
+    /** 执行 DRAFT → APPROVED，并记录非空审核人。 */
     public KnowledgeDocumentIdentity approve(String documentNo, String version, String reviewer) {
         if (reviewer == null || reviewer.isBlank()) {
             throw new IllegalArgumentException("知识审核人不能为空");
@@ -22,12 +29,14 @@ public class KnowledgePublicationService {
     }
 
     @Transactional
+    /** 执行 APPROVED → PUBLISHED，使该版本具备进入客户召回的必要状态。 */
     public KnowledgeDocumentIdentity publish(String documentNo, String version) {
         return transition(documentNo, version, KnowledgeDocumentStatus.APPROVED,
                 KnowledgeDocumentStatus.PUBLISHED, null);
     }
 
     @Transactional
+    /** 执行 PUBLISHED → EXPIRED，使该版本立即退出客户召回。 */
     public KnowledgeDocumentIdentity expire(String documentNo, String version) {
         return transition(documentNo, version, KnowledgeDocumentStatus.PUBLISHED,
                 KnowledgeDocumentStatus.EXPIRED, null);

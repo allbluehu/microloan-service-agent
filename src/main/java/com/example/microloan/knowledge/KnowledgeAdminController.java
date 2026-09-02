@@ -19,6 +19,13 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/v1/admin/knowledge")
 @Validated
+/**
+ * 知识治理管理接口，串联“导入草稿—审批—发布/下线—向量索引”生命周期。
+ *
+ * <p>安全层要求独立的知识管理员密钥。Controller 只处理 HTTP/文件协议，内容校验和事务边界分别下沉到
+ * {@link KnowledgeImportService}、{@link KnowledgePublicationService} 和
+ * {@link KnowledgeEmbeddingService}。</p>
+ */
 public class KnowledgeAdminController {
 
     private final KnowledgeImportService importService;
@@ -34,12 +41,14 @@ public class KnowledgeAdminController {
     }
 
     @PostMapping("/documents/markdown")
+    /** 解析带元数据头的 Markdown，并事务化写入文档及切片草稿。 */
     public KnowledgeImportResult importMarkdown(@Valid @RequestBody MarkdownImportRequest request) {
         // 导入永远只产生 DRAFT，上传动作不能绕过后续独立审批与发布门禁。
         return importService.importMarkdownDraft(request.markdown());
     }
 
     @PostMapping(value = "/documents/pdf", consumes = "multipart/form-data")
+    /** 校验并解析文本型 PDF，将独立提交的元数据与正文合成为草稿版本。 */
     public KnowledgeImportResult importPdf(@RequestPart("file") MultipartFile file,
                                            @Valid @RequestPart("metadata") PdfImportMetadataRequest request)
             throws IOException {
@@ -53,6 +62,7 @@ public class KnowledgeAdminController {
     }
 
     @PostMapping("/documents/{documentNo}/versions/{version}/approve")
+    /** 将指定版本从 DRAFT 原子迁移到 APPROVED，并固化审核人和审核时间。 */
     public KnowledgeDocumentIdentity approve(@PathVariable @NotBlank String documentNo,
                                              @PathVariable @NotBlank String version,
                                              @Valid @RequestBody ApprovalRequest request) {
@@ -60,18 +70,21 @@ public class KnowledgeAdminController {
     }
 
     @PostMapping("/documents/{documentNo}/versions/{version}/publish")
+    /** 将已审批版本发布；只有 PUBLISHED 才能被客户检索 SQL 命中。 */
     public KnowledgeDocumentIdentity publish(@PathVariable @NotBlank String documentNo,
                                              @PathVariable @NotBlank String version) {
         return publicationService.publish(documentNo, version);
     }
 
     @PostMapping("/documents/{documentNo}/versions/{version}/expire")
+    /** 下线已发布版本；状态变更后立即从客户召回集合中排除。 */
     public KnowledgeDocumentIdentity expire(@PathVariable @NotBlank String documentNo,
                                             @PathVariable @NotBlank String version) {
         return publicationService.expire(documentNo, version);
     }
 
     @PostMapping("/embeddings/index")
+    /** 为缺失或模型版本过旧的切片补建向量，可在部分成功后重复调用。 */
     public KnowledgeEmbeddingIndexResult indexEmbeddings() {
         // 索引操作按切片和模型版本幂等，可在供应商限流或进程中断后由管理员安全重试。
         return embeddingService.indexPendingChunks();

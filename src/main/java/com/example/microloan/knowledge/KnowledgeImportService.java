@@ -5,6 +5,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+/**
+ * 知识草稿导入事务门面。
+ *
+ * <p>Markdown 和 PDF 在各自解析器中转换为统一 KnowledgeMarkdownDocument，随后共同经过语义切片，
+ * 最后在同一事务内写入文档与全部切片。导入仅产生 DRAFT，不隐式审批、发布或调用向量模型。</p>
+ */
 public class KnowledgeImportService {
 
     private final KnowledgeMarkdownParser markdownParser;
@@ -23,11 +29,13 @@ public class KnowledgeImportService {
     }
 
     @Transactional
+    /** 解析元数据头和正文，校验后写入 Markdown 草稿。 */
     public KnowledgeImportResult importMarkdownDraft(String markdown) {
         return importDraft(markdownParser.parse(markdown));
     }
 
     @Transactional
+    /** 完成 PDF 文件安全校验与文本提取，再按统一草稿链写入。 */
     public KnowledgeImportResult importPdfDraft(String filename, byte[] content, KnowledgePdfMetadata metadata) {
         return importDraft(pdfParser.parse(filename, content, metadata));
     }

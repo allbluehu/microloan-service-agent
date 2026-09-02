@@ -20,6 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/chat/sessions")
 @Validated
+/**
+ * 客户对话 HTTP 接口。
+ *
+ * <p>发送消息调用 {@link AgentOrchestrator#handle} 完成整轮编排；历史消息和会话列表直接调用
+ * {@link ChatHistoryService}，后者在 SQL 层始终附带当前 customerId，防止通过 sessionId 横向读取。</p>
+ */
 public class ChatController {
 
     private final AgentOrchestrator orchestrator;
@@ -31,6 +37,7 @@ public class ChatController {
     }
 
     @PostMapping("/{sessionId}/messages")
+    /** 提交一轮对话；业务失败由统一异常处理器转换为稳定 API 错误契约。 */
     public ChatResponse send(@PathVariable String sessionId, @Valid @RequestBody ChatRequest request) {
         // Controller 只负责协议转换；认证上下文、会话归属和业务路由统一由编排链处理。
         AgentState state = orchestrator.handle(sessionId, request.messageId(), request.content(),
@@ -40,6 +47,7 @@ public class ChatController {
     }
 
     @GetMapping("/{sessionId}/messages")
+    /** 查询当前客户指定会话的最近消息，返回结果同时包含已提交的反馈。 */
     public List<ChatMessageView> messages(@AuthenticationPrincipal CustomerPrincipal principal,
                                           @PathVariable String sessionId,
                                           @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit) {
@@ -47,6 +55,7 @@ public class ChatController {
     }
 
     @GetMapping
+    /** 查询当前客户最近更新的会话摘要，不接受请求方传入 customerId。 */
     public List<ChatSessionView> sessions(@AuthenticationPrincipal CustomerPrincipal principal,
                                           @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
         return chatHistoryService.findRecentSessions(principal.customerId(), limit);

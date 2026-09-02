@@ -35,6 +35,12 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", exception.getMessage());
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    ResponseEntity<ApiError> handleIllegalState(IllegalStateException exception) {
+        // 知识版本冲突和非法状态迁移属于当前资源状态冲突，不应以 500 伪装成服务故障。
+        return problem(HttpStatus.CONFLICT, "STATE_CONFLICT", exception.getMessage());
+    }
+
     @ExceptionHandler(StepUpAuthRequiredException.class)
     ResponseEntity<ApiError> handleStepUpRequired(StepUpAuthRequiredException exception) {
         return problem(HttpStatus.FORBIDDEN, "STEP_UP_AUTH_REQUIRED", exception.getMessage());
