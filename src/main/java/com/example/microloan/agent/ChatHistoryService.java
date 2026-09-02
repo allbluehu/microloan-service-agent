@@ -2,6 +2,7 @@ package com.example.microloan.agent;
 
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 /**
@@ -22,6 +23,7 @@ public class ChatHistoryService {
      * 幂等创建/校验会话、合并本轮显式槽位并保存客户消息。
      * 空白槽位不会清除历史选择；返回值是回读后的数据库快照，供本轮所有后续节点共同使用。
      */
+    @Transactional
     public ChatSessionContext recordUserMessage(Long customerId, String sessionId, String messageId, String content,
                                                 String selectedLoanId, String selectedApplicationId,
                                                 String selectedProductCode, String selectedRegion) {
@@ -41,7 +43,8 @@ public class ChatHistoryService {
         return updated;
     }
 
-    /** 保存本轮最终答复并刷新会话时间；与 handle 共享事务，防止只保存半轮消息。 */
+    /** 在独立短事务中保存护栏处理后的最终答复并刷新会话时间。 */
+    @Transactional
     public void recordAssistantMessage(Long sessionDbId, String messageId, AgentState state) {
         // 使用派生消息标识区分同一轮的用户与助手记录，同时保留数据库唯一约束的幂等保护。
         mapper.insertMessage(sessionDbId, messageId + ":assistant", "ASSISTANT",

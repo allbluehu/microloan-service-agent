@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AgentTraceService {
@@ -26,11 +28,13 @@ public class AgentTraceService {
         return new TraceContext(traceId, sessionId, customerId, new AtomicInteger());
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void success(TraceContext context, String nodeName, String inputSummary, String outputSummary,
                         long latencyMs) {
         record(context, nodeName, inputSummary, outputSummary, null, null, latencyMs, "SUCCESS");
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void intentSuccess(TraceContext context, String inputSummary, String outputSummary,
                               boolean modelUsed, long latencyMs) {
         // 只有模型结果真正通过协议与置信度门槛时才记录模型版本，规则降级不能伪装成模型成功。
@@ -38,6 +42,7 @@ public class AgentTraceService {
                 modelUsed ? chatModelVersion : null, IntentClassifier.PROMPT_VERSION, latencyMs, "SUCCESS");
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failed(TraceContext context, String nodeName, String inputSummary, RuntimeException exception,
                        long latencyMs) {
         // Exception type is enough for diagnosis here; messages may contain business or customer data.

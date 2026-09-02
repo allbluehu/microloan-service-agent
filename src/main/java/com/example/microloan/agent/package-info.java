@@ -3,8 +3,8 @@
  *
  * <h2>客户对话主调用链</h2>
  * <ol>
- *   <li>{@link com.example.microloan.agent.ChatController} 接收消息，只完成 HTTP 参数校验与响应转换。</li>
- *   <li>{@link com.example.microloan.agent.AgentOrchestrator#handle} 从安全上下文取得客户身份，调用
+ *   <li>{@link com.example.microloan.agent.ChatController} 接收消息，从认证主体构造可信执行上下文并完成协议转换。</li>
+ *   <li>{@link com.example.microloan.agent.AgentOrchestrator#handle} 使用显式执行上下文，调用
  *       {@link com.example.microloan.agent.ChatHistoryService} 固化消息和会话槽位。</li>
  *   <li>编排器依次执行 {@link com.example.microloan.agent.RiskClassifier}、
  *       {@link com.example.microloan.agent.CompositeIntentDetector} 和
@@ -14,7 +14,7 @@
  *       RepaymentTools、ApplicationTools、PaymentTools、SettlementTools、TicketTools 或知识服务；
  *       模型不能直接执行方法，也不能提供 customerId。</li>
  *   <li>业务结果包装为 {@link com.example.microloan.agent.ToolResult} 并写回不可变
- *       {@link com.example.microloan.agent.AgentState}，随后保存助手消息并返回 API。</li>
+ *       {@link com.example.microloan.agent.AgentState}，经过统一输出护栏后保存助手消息并返回 API。</li>
  * </ol>
  *
  * <h2>横切约束</h2>

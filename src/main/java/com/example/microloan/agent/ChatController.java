@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.LocalDate;
 import java.util.List;
+import com.example.microloan.api.RequestTraceContext;
 import com.example.microloan.security.CustomerPrincipal;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -38,11 +39,15 @@ public class ChatController {
 
     @PostMapping("/{sessionId}/messages")
     /** 提交一轮对话；业务失败由统一异常处理器转换为稳定 API 错误契约。 */
-    public ChatResponse send(@PathVariable String sessionId, @Valid @RequestBody ChatRequest request) {
-        // Controller 只负责协议转换；认证上下文、会话归属和业务路由统一由编排链处理。
-        AgentState state = orchestrator.handle(sessionId, request.messageId(), request.content(),
+    public ChatResponse send(@AuthenticationPrincipal CustomerPrincipal principal,
+                             @PathVariable String sessionId, @Valid @RequestBody ChatRequest request) {
+        // customerId 和 traceId 均来自服务端上下文；请求体和模型不能覆盖可信执行身份。
+        AgentRequest command = new AgentRequest(sessionId, request.messageId(), request.content(),
                 request.selectedLoanId(), request.selectedApplicationId(), request.selectedProductCode(),
                 request.selectedRegion(), request.settlementDate());
+        AgentExecutionContext context = new AgentExecutionContext(
+                principal.customerId(), RequestTraceContext.currentOrCreate());
+        AgentState state = orchestrator.handle(command, context);
         return new ChatResponse(state.traceId(), state.intent(), state.finalAnswer(), state.toolResult());
     }
 
