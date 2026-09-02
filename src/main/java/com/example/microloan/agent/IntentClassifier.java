@@ -12,9 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class IntentClassifier {
 
-    public static final String PROMPT_VERSION = "intent-v2";
+    public static final String PROMPT_VERSION = "intent-v4";
     private static final double MODEL_CONFIDENCE_THRESHOLD = 0.75;
-    private static final String PROMPT_RESOURCE = "prompts/intent-classifier-v2.txt";
+    private static final int MAX_MODEL_INPUT_LENGTH = 1000;
+    private static final String PROMPT_RESOURCE = "prompts/intent-classifier-v4.txt";
     private static final String PROMPT = loadPrompt();
 
     private final ObjectProvider<ChatModel> chatModelProvider;
@@ -71,7 +72,14 @@ public class IntentClassifier {
     }
 
     String renderPrompt(String message) {
-        return PROMPT.formatted(message);
+        // 外部模型只接收完成意图判断所需的有限文本，持久化与模型发送共用同一脱敏规则。
+        String safeMessage = SensitiveTextSanitizer.redactAndLimit(message, MAX_MODEL_INPUT_LENGTH);
+        try {
+            // JSON 编码会转义引号、换行等结构字符，客户内容无法伪造提示词的数据边界。
+            return PROMPT.formatted(objectMapper.writeValueAsString(safeMessage));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to encode model input", exception);
+        }
     }
 
     private static String loadPrompt() {

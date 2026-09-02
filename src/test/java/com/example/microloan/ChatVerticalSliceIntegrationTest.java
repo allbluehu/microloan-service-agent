@@ -208,6 +208,50 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void customerCanUpdateFeedbackOnlyForOwnedAssistantMessage() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-FEEDBACK/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-FEEDBACK","content":"我下个月要还多少钱？","selectedLoanId":"L10001"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/chat/messages/M-FEEDBACK/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"DOWN","reason":"OUTDATED_INFORMATION","comment":"证件 110101199001011234"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messageId").value("M-FEEDBACK"))
+                .andExpect(jsonPath("$.comment").value("证件 [REDACTED]"));
+
+        mockMvc.perform(post("/api/v1/chat/messages/M-FEEDBACK/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"UP"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rating").value("UP"))
+                .andExpect(jsonPath("$.reason").doesNotExist());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM chat_feedback WHERE customer_id = 10001", Integer.class)).isEqualTo(1);
+
+        String otherCustomerToken = login("C10002");
+        mockMvc.perform(post("/api/v1/chat/messages/M-FEEDBACK/feedback")
+                        .header("Authorization", "Bearer " + otherCustomerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"DOWN","reason":"INCORRECT_ANSWER"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void conversationReusesOnlyPreviouslySelectedResourceIdentifier() throws Exception {
         String token = login("C10001");
         mockMvc.perform(post("/api/v1/chat/sessions/S-CONTEXT-1/messages")

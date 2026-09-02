@@ -159,6 +159,20 @@ CREATE TABLE chat_message (
 CREATE INDEX idx_chat_session_customer ON chat_session(customer_id, updated_at DESC);
 CREATE INDEX idx_chat_message_session ON chat_message(session_id, created_at, id);
 
+CREATE TABLE chat_feedback (
+    id BIGSERIAL PRIMARY KEY,                              -- 回答反馈数据库主键
+    chat_message_id BIGINT NOT NULL UNIQUE REFERENCES chat_message(id), -- 被评价的 Assistant 消息主键，同一消息仅保留一份反馈
+    customer_id BIGINT NOT NULL REFERENCES customer(id), -- 提交反馈的客户主键，用于强制数据隔离
+    rating VARCHAR(10) NOT NULL,                          -- 评价方向：UP 或 DOWN
+    reason VARCHAR(40),                                   -- 受控反馈原因，可为空
+    comment VARCHAR(500),                                 -- 脱敏并限制长度的补充说明，可为空
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 首次提交时间
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 最近更新时间
+    CONSTRAINT ck_chat_feedback_rating CHECK (rating IN ('UP', 'DOWN')) -- 限制受控评价方向
+);
+
+CREATE INDEX idx_chat_feedback_customer ON chat_feedback(customer_id, updated_at DESC);
+
 CREATE TABLE agent_trace (
     id BIGSERIAL PRIMARY KEY,                              -- Trace 记录数据库主键
     trace_id VARCHAR(64) NOT NULL,                        -- 单次 Agent 请求的全链路追踪标识
@@ -362,6 +376,17 @@ COMMENT ON COLUMN chat_message.created_at IS '消息创建时间';
 COMMENT ON CONSTRAINT ck_chat_message_role ON chat_message IS '限制消息角色为 USER 或 ASSISTANT';
 COMMENT ON CONSTRAINT uk_chat_message_identity ON chat_message IS '同一会话内相同消息标识和角色只允许写入一次';
 
+COMMENT ON TABLE chat_feedback IS '客户对 Agent 回答提交的幂等评价';
+COMMENT ON COLUMN chat_feedback.id IS '回答反馈数据库主键';
+COMMENT ON COLUMN chat_feedback.chat_message_id IS '被评价的 Assistant 消息主键，同一消息仅保留一份反馈';
+COMMENT ON COLUMN chat_feedback.customer_id IS '提交反馈的客户主键，用于强制数据隔离';
+COMMENT ON COLUMN chat_feedback.rating IS '评价方向：UP 或 DOWN';
+COMMENT ON COLUMN chat_feedback.reason IS '受控反馈原因，可为空';
+COMMENT ON COLUMN chat_feedback.comment IS '脱敏并限制长度的补充说明，可为空';
+COMMENT ON COLUMN chat_feedback.created_at IS '首次提交时间';
+COMMENT ON COLUMN chat_feedback.updated_at IS '最近更新时间';
+COMMENT ON CONSTRAINT ck_chat_feedback_rating ON chat_feedback IS '限制评价方向为 UP 或 DOWN';
+
 COMMENT ON TABLE agent_trace IS 'Agent 节点级执行追踪与审计记录';
 COMMENT ON COLUMN agent_trace.id IS 'Trace 记录数据库主键';
 COMMENT ON COLUMN agent_trace.trace_id IS '单次 Agent 请求的全链路追踪标识';
@@ -418,6 +443,7 @@ COMMENT ON INDEX idx_payment_record_loan_time IS '按贷款和支付时间倒序
 COMMENT ON INDEX idx_service_ticket_customer IS '按客户和创建时间倒序查询工单';
 COMMENT ON INDEX idx_chat_session_customer IS '按客户和最近消息时间查询会话';
 COMMENT ON INDEX idx_chat_message_session IS '按会话和时间顺序查询消息';
+COMMENT ON INDEX idx_chat_feedback_customer IS '按客户和更新时间查询回答反馈';
 COMMENT ON INDEX idx_agent_trace_customer IS '按客户和创建时间查询 Agent Trace';
 COMMENT ON INDEX idx_knowledge_chunk_fts IS '知识切片全文检索 GIN 索引';
 COMMENT ON INDEX idx_knowledge_chunk_trgm IS '知识检索文本模糊匹配 trigram 索引';

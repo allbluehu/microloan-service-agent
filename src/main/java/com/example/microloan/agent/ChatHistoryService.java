@@ -1,13 +1,11 @@
 package com.example.microloan.agent;
 
 import java.util.List;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ChatHistoryService {
     private static final int MAX_CONTENT_LENGTH = 2000;
-    private static final Pattern SENSITIVE_DIGITS = Pattern.compile("(?<!\\d)\\d{6,}(?!\\d)");
     private final ChatHistoryMapper mapper;
 
     public ChatHistoryService(ChatHistoryMapper mapper) {
@@ -49,8 +47,7 @@ public class ChatHistoryService {
     }
 
     String sanitize(String content) {
-        String redacted = SENSITIVE_DIGITS.matcher(content == null ? "" : content).replaceAll("[REDACTED]");
-        return redacted.length() <= MAX_CONTENT_LENGTH ? redacted : redacted.substring(0, MAX_CONTENT_LENGTH);
+        return SensitiveTextSanitizer.redactAndLimit(content, MAX_CONTENT_LENGTH);
     }
 
     private String blankToNull(String value) {
