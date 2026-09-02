@@ -30,7 +30,7 @@ spring:
       chat:
         completions-path: ${GLM_CHAT_COMPLETIONS_PATH:/chat/completions}
         options:
-          model: ${GLM_CHAT_MODEL:glm-4.7-flash}
+          model: ${GLM_CHAT_MODEL:glm-4.6}
           temperature: 0
       embedding:
         embeddings-path: ${GLM_EMBEDDINGS_PATH:/embeddings}
