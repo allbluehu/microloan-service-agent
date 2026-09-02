@@ -11,10 +11,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 模型调用隔离层测试。
+ * ModelCallExecutor 包围真正的 ChatModel 调用，按“并发许可 → 熔断许可 → 虚拟线程执行 → 总超时”顺序控制资源，
+ * 并将固定 outcome 写入 Micrometer；这些测试不访问网络，只验证并发与状态转换。
+ */
 class ModelCallExecutorTest {
 
     @Test
     void returnsCompletedModelCall() {
+        // 正常完成必须同时返回模型结果、记录 success 次数并写入统一耗时指标。
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ModelCallExecutor executor = new ModelCallExecutor(
                 Duration.ofSeconds(1), 20,
@@ -30,6 +36,7 @@ class ModelCallExecutorTest {
 
     @Test
     void cancelsModelCallAfterConfiguredTimeout() {
+        // park 模拟不响应的供应商；总预算到期后任务应被中断，调用方随后可进入规则降级。
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ModelCallExecutor executor = new ModelCallExecutor(
                 Duration.ofMillis(20), 20,
@@ -48,6 +55,7 @@ class ModelCallExecutorTest {
 
     @Test
     void recordsExecutionFailureAndCircuitRejectionSeparately() {
+        // 阈值设为 1 让首次失败立即开路，第二次调用不得再执行 Supplier。
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong ticker = new AtomicLong();
         ModelCircuitBreaker circuitBreaker = new ModelCircuitBreaker(
@@ -71,6 +79,7 @@ class ModelCallExecutorTest {
 
     @Test
     void rejectsImmediatelyWhenConcurrentCapacityIsExhausted() throws Exception {
+        // 两个闩锁稳定占住唯一许可，证明第二个调用不是等待超时，而是立即按容量不足拒绝。
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ModelCallExecutor executor = new ModelCallExecutor(
                 Duration.ofSeconds(1), 1,

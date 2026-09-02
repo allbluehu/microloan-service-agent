@@ -1,0 +1,10 @@
+[
+  {"id":"EH-001","question":"开小店的老板办借款要带哪些证明？","productCode":"MICRO_BUSINESS","expectedDocumentId":"KB-MB-MATERIALS"},
+  {"id":"EH-002","question":"我自己做生意，什么样的经营者才有申请资格？","productCode":"MICRO_BUSINESS","expectedDocumentId":"KB-MB-ELIGIBILITY"},
+  {"id":"EH-003","question":"店铺贷款最多能分几年还完？","productCode":"MICRO_BUSINESS","expectedDocumentId":"KB-MB-TERM"},
+  {"id":"EH-004","question":"资料交上去以后，去哪里看审核到哪一步？","productCode":"MICRO_BUSINESS","expectedDocumentId":"KB-MB-PROCESS"},
+  {"id":"EH-005","question":"银行准备扣钱之前，我需要提前做什么？","productCode":"GENERAL_SERVICE","expectedDocumentId":"KB-GENERAL-REPAYMENT"},
+  {"id":"EH-006","question":"我想一次全部还清，最终金额应该怎样确认？","productCode":"GENERAL_SERVICE","expectedDocumentId":"KB-GENERAL-SETTLEMENT"},
+  {"id":"EH-007","question":"个人日常消费借款需要提交哪些身份证明？","productCode":"PERSONAL_CONSUMER","expectedDocumentId":"KB-PC-MATERIALS"},
+  {"id":"EH-008","question":"钱已经付成功了，但账单一直没有变化怎么办？","productCode":"GENERAL_SERVICE","expectedDocumentId":"KB-SERVICE-PAYMENT-NOT-POSTED"}
+]

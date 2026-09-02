@@ -27,7 +27,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
-/** 使用显式开关运行的真实模型评测，默认测试流程不会访问外部模型或消耗额度。 */
+/**
+ * GLM 真实意图分类质量门禁。
+ * 调用链为“版本化样本 → 与生产一致的风险/复合意图前置过滤 → HTTP 调用 GLM → IntentClassifier 严格协议解析
+ * → 聚合质量指标 → 先落盘报告再断言门槛”。使用显式开关，普通测试不会访问外部模型或消耗额度。
+ */
 @EnabledIfEnvironmentVariable(named = "REAL_MODEL_EVAL_ENABLED", matches = "true")
 class RealModelIntentEvaluationTest {
 
@@ -42,10 +46,11 @@ class RealModelIntentEvaluationTest {
 
     @Test
     void realModelMeetsVersionedIntentQualityGates() throws Exception {
+        // 模型、端点、节流和质量门槛全部来自环境变量，使同一评测代码可复现不同部署配置。
         String apiKey = requiredEnvironment("GLM_API_KEY");
         String baseUrl = environment("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4");
         String path = environment("GLM_CHAT_COMPLETIONS_PATH", "/chat/completions");
-        String model = environment("GLM_CHAT_MODEL", "glm-4.7-flash");
+        String model = environment("GLM_CHAT_MODEL", "glm-4.6");
         long intervalMs = Long.parseLong(environment("REAL_MODEL_EVAL_INTERVAL_MS", "500"));
         double accuracyGate = Double.parseDouble(environment("REAL_MODEL_EVAL_MIN_ACCURACY", "0.90"));
         double protocolGate = Double.parseDouble(environment("REAL_MODEL_EVAL_MIN_PROTOCOL_RATE", "0.95"));
@@ -81,6 +86,7 @@ class RealModelIntentEvaluationTest {
             caseResult.put("expectedIntent", evaluationCase.path("expectedIntent").asText());
             long started = System.nanoTime();
             try {
+                // 真实评测刻意直接记录每次供应商响应，不用业务规则掩盖 429、协议失败或传输故障。
                 HttpResponse<String> response = invoke(client, endpoint, apiKey, model,
                         classifier.renderPrompt(question));
                 long latencyMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
@@ -123,6 +129,7 @@ class RealModelIntentEvaluationTest {
         double accuracy = evaluated == 0 ? 0 : (double) correct / evaluated;
         double protocolRate = evaluated == 0 ? 0 : (double) protocolValid / evaluated;
         ObjectNode report = objectMapper.createObjectNode();
+        // 报告绑定模型、提示词和数据集哈希，后续比较准确率时不会混淆输入版本。
         report.put("schemaVersion", "intent-evaluation-v1");
         report.put("generatedAt", Instant.now().toString());
         report.put("provider", "GLM");
@@ -150,6 +157,7 @@ class RealModelIntentEvaluationTest {
                 IntentClassifier.PROMPT_VERSION + "--" + safeModel + "--" + FILE_TIME.format(Instant.now()) + ".json");
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(reportPath.toFile(), report);
 
+        // 即使门槛失败报告也已写入，失败本身成为可分析、可追溯的评测结果。
         assertThat(accuracy)
                 .as("真实模型准确率未达门槛，完整报告：%s", reportPath)
                 .isGreaterThanOrEqualTo(accuracyGate);

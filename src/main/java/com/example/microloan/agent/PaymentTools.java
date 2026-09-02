@@ -3,7 +3,6 @@ package com.example.microloan.agent;
 import com.example.microloan.payment.PaymentHistory;
 import com.example.microloan.payment.PaymentService;
 import com.example.microloan.security.CustomerPrincipal;
-import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +15,6 @@ public class PaymentTools {
         this.paymentService = paymentService;
     }
 
-    @Tool(description = "查询已登录客户指定贷款最近的还款记录，最多返回20条")
     public PaymentHistory getPaymentRecords(String loanId) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (!(principal instanceof CustomerPrincipal customer)) {

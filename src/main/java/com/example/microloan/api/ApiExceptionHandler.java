@@ -2,6 +2,7 @@ package com.example.microloan.api;
 
 import com.example.microloan.application.ApplicationAccessDeniedException;
 import com.example.microloan.agent.ToolUnavailableException;
+import com.example.microloan.knowledge.EmbeddingModelUnavailableException;
 import com.example.microloan.repayment.LoanAccessDeniedException;
 import com.example.microloan.settlement.StepUpAuthRequiredException;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ToolUnavailableException.class)
     ResponseEntity<ApiError> handleToolUnavailable(ToolUnavailableException exception) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "TOOL_UNAVAILABLE", exception.getMessage());
+    }
+
+    @ExceptionHandler(EmbeddingModelUnavailableException.class)
+    ResponseEntity<ApiError> handleEmbeddingModelUnavailable(EmbeddingModelUnavailableException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "EMBEDDING_MODEL_UNAVAILABLE", exception.getMessage());
     }
 
     @ExceptionHandler(ResponseStatusException.class)

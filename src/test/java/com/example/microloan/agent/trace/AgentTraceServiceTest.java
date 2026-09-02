@@ -6,10 +6,16 @@ import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * 意图节点 Trace 元数据测试。
+ * 通过 Mock Mapper 只验证 AgentTraceService 最终写库参数：模型输出真正通过协议和置信度门槛时才记录模型版本，
+ * 规则降级仍记录提示词协议版本，但不能伪装为模型成功。
+ */
 class AgentTraceServiceTest {
 
     @Test
     void recordsConfiguredModelOnlyWhenModelResultWasAccepted() {
+        // 两个独立 Trace 避免 sequence 相互影响，也同时验证每条链都从节点序号 1 开始。
         AgentTraceMapper mapper = mock(AgentTraceMapper.class);
         AgentTraceService service = new AgentTraceService(mapper, "glm-4.7-flash");
         AgentTraceService.TraceContext modelTrace = service.start("T-MODEL", "S1", 10001L);

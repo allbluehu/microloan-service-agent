@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.microloan.agent.IntentClassifier;
 import com.example.microloan.knowledge.KnowledgeAnswer;
 import com.example.microloan.knowledge.KnowledgeChunkForEmbedding;
 import com.example.microloan.knowledge.KnowledgeClasspathImporter;
@@ -28,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +46,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest(properties = "spring.ai.model.chat=none")
+@SpringBootTest(properties = {
+        "spring.ai.model.chat=none",
+        "knowledge.admin.api-key=test-knowledge-admin-key-32-bytes!!"
+})
 @AutoConfigureMockMvc
 @Testcontainers
 class ChatVerticalSliceIntegrationTest {
@@ -777,6 +782,51 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void knowledgeAdminApiRequiresIndependentCredentialAndControlsPublication() throws Exception {
+        String path = "/api/v1/admin/knowledge/documents/markdown";
+        String requestBody = objectMapper.writeValueAsString(Map.of("markdown", adminKnowledgeMarkdown()));
+
+        mockMvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        String customerToken = login("C10001");
+        mockMvc.perform(post(path)
+                        .header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post(path)
+                        .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentNo").value("KD-ADMIN-001"))
+                .andExpect(jsonPath("$.duplicate").value(false));
+
+        mockMvc.perform(post("/api/v1/admin/knowledge/documents/KD-ADMIN-001/versions/2026.1/approve")
+                        .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reviewer\":\"knowledge-reviewer\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.reviewer").value("knowledge-reviewer"));
+
+        mockMvc.perform(post("/api/v1/admin/knowledge/documents/KD-ADMIN-001/versions/2026.1/publish")
+                        .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+        // 测试上下文关闭了 Embedding，管理端应明确报告配置缺失，不能返回伪成功。
+        mockMvc.perform(post("/api/v1/admin/knowledge/embeddings/index")
+                        .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("向量模型未启用")));
+    }
+
+    @Test
     void classpathKnowledgeBootstrapImportsTenDraftsIdempotently() throws Exception {
         KnowledgeClasspathImporter importer = new KnowledgeClasspathImporter(
                 resourcePatternResolver, knowledgeImportService, 1024 * 1024);
@@ -1082,6 +1132,26 @@ class ChatVerticalSliceIntegrationTest {
                 # 经营贷发布流程测试
                 ## 对客说明
                 该内容仅在审核并发布后参与客户检索。
+                """;
+    }
+
+    private String adminKnowledgeMarkdown() {
+        return """
+                ---
+                documentNo: KD-ADMIN-001
+                title: 管理接口发布流程测试
+                productCode: MICRO_BUSINESS
+                region: ALL
+                version: 2026.1
+                audience: CUSTOMER
+                effectiveFrom: 2026-09-01
+                effectiveTo:
+                reviewer: draft-author
+                keywords: 管理接口, 发布流程
+                ---
+                # 管理接口发布流程测试
+                ## 对客内容
+                该内容必须经过独立管理员认证、审核和发布后才能参与召回。
                 """;
     }
 

@@ -42,3 +42,17 @@ curl -s http://localhost:8080/api/v1/chat/sessions/S10001/messages \
 ```
 
 默认禁用真实模型，意图分类使用窄规则降级，知识问答只使用全文检索。项目选用 GLM 的 OpenAI 兼容接口：参考 `.env.example` 配置 `GLM_API_KEY`，将 `AI_CHAT_MODEL` 设置为 `openai` 即可启用意图分类；需要向量检索时再将 `AI_EMBEDDING_MODEL` 设置为 `openai`，使用 `embedding-3` 完成全部知识切片索引后启用 `KNOWLEDGE_VECTOR_ENABLED`。更多设计资料见 [文档中心](docs/README.md)。
+
+真实 `embedding-3` 与混合召回可通过 `REAL_EMBEDDING_EVAL_ENABLED=true mvn -Dtest=RealEmbeddingHybridEvaluationTest test` 在一次性 Testcontainers 数据库中验证，普通测试默认不会访问外部模型或消耗额度。
+
+## 知识管理
+
+知识治理 API 使用独立管理密钥，客户 JWT 无权导入或发布知识。本地 `.env` 至少配置：
+
+```env
+KNOWLEDGE_ADMIN_API_KEY=请替换为高强度随机值
+```
+
+调用时携带 `X-Knowledge-Admin-Key`。管理流程固定为“导入 DRAFT → 审批 APPROVED → 发布 PUBLISHED →
+按需补建向量”；详细接口见 [接口与数据模型](docs/04-接口与数据模型.md)。向量入口要求
+`AI_EMBEDDING_MODEL=openai`，返回的 `indexedChunkCount` 为本次实际补建数量，重复执行时只处理缺失或旧模型切片。

@@ -3,7 +3,6 @@ package com.example.microloan.agent;
 import com.example.microloan.repayment.NextRepaymentPlan;
 import com.example.microloan.repayment.RepaymentService;
 import com.example.microloan.security.CustomerPrincipal;
-import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +15,6 @@ public class RepaymentTools {
         this.repaymentService = repaymentService;
     }
 
-    @Tool(description = "查询已登录客户指定贷款的下一期待还金额和日期")
     public NextRepaymentPlan getNextRepaymentPlan(String loanId) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (!(principal instanceof CustomerPrincipal customer)) {

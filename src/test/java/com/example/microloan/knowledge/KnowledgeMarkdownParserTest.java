@@ -11,12 +11,18 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Markdown 知识入库前的解析与切片测试。
+ * 调用链为“原始受控文档 → 元数据校验与规范化校验和 → 标题/段落语义切片 → KnowledgeImportService 写入草稿”，
+ * 本类在数据库之前锁定内容身份、适用范围和切片稳定性。
+ */
 class KnowledgeMarkdownParserTest {
 
     private final KnowledgeMarkdownParser parser = new KnowledgeMarkdownParser();
 
     @Test
     void parsesRequiredMetadataAndNormalizesLineEndingsForChecksum() {
+        // Windows 与 Unix 换行必须得到同一内容身份，否则跨环境导入会被误判为不同版本。
         KnowledgeMarkdownDocument unix = parser.parse(markdown("\n"));
         KnowledgeMarkdownDocument windows = parser.parse(markdown("\r\n"));
 
@@ -30,6 +36,7 @@ class KnowledgeMarkdownParserTest {
 
     @Test
     void rejectsInvalidAudienceAndEffectiveDateRange() {
+        // 受众和有效期决定客户是否可见，非法元数据必须在落库前失败而不是依赖查询阶段兜底。
         assertThatThrownBy(() -> parser.parse(markdown("\n").replace("audience: PUBLIC", "audience: SECRET")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("audience");
@@ -41,6 +48,7 @@ class KnowledgeMarkdownParserTest {
 
     @Test
     void chunksByHeadingAndKeepsSearchKeywords() {
+        // 标题路径用于引用展示，元数据关键词进入 searchText 以弥补正文词项不足。
         KnowledgeMarkdownDocument document = parser.parse(markdown("\n"));
         KnowledgeMarkdownChunker chunker = new KnowledgeMarkdownChunker(800);
 
@@ -55,6 +63,7 @@ class KnowledgeMarkdownParserTest {
 
     @Test
     void oversizedParagraphPrefersChineseSentenceBoundary() {
+        // 超长段落优先沿中文句号切分，既满足模型输入上限，也避免把完整语义句截断。
         String firstSentence = "这是第一段较长的申请材料说明".repeat(6) + "。";
         String secondSentence = "这是第二段较长的补充材料说明".repeat(6) + "。";
         KnowledgeMarkdownDocument document = parser.parse(
@@ -69,6 +78,7 @@ class KnowledgeMarkdownParserTest {
 
     @Test
     void allClasspathKnowledgeAssetsAreValidAndUniquelyVersioned() throws Exception {
+        // 扫描真实仓库资产而非测试夹具，防止新增文档绕过解析约束或复用已有文档号版本。
         Resource[] resources = new PathMatchingResourcePatternResolver()
                 .getResources("classpath*:knowledge/*.md");
         KnowledgeMarkdownChunker chunker = new KnowledgeMarkdownChunker(800);

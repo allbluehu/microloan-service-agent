@@ -4,7 +4,6 @@ import com.example.microloan.security.CustomerPrincipal;
 import com.example.microloan.settlement.SettlementQuote;
 import com.example.microloan.settlement.SettlementService;
 import java.time.LocalDate;
-import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,6 @@ public class SettlementTools {
         this.settlementService = settlementService;
     }
 
-    @Tool(description = "在二次认证后试算指定贷款于指定日期的提前结清金额，不执行真实支付")
     public SettlementQuote calculateEarlySettlement(String loanId, LocalDate settlementDate) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (!(principal instanceof CustomerPrincipal customer)) {
