@@ -168,7 +168,11 @@ CREATE TABLE chat_feedback (
     comment VARCHAR(500),                                 -- 脱敏并限制长度的补充说明，可为空
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 首次提交时间
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 最近更新时间
-    CONSTRAINT ck_chat_feedback_rating CHECK (rating IN ('UP', 'DOWN')) -- 限制受控评价方向
+    CONSTRAINT ck_chat_feedback_rating CHECK (rating IN ('UP', 'DOWN')), -- 限制受控评价方向
+    CONSTRAINT ck_chat_feedback_reason CHECK (
+        (rating = 'UP' AND reason IS NULL)
+        OR (rating = 'DOWN' AND reason IN ('OUTDATED_INFORMATION', 'INCORRECT_ANSWER', 'NOT_HELPFUL', 'OTHER'))
+    ) -- 点踩必须选择受控原因，点赞不携带负向原因
 );
 
 CREATE INDEX idx_chat_feedback_customer ON chat_feedback(customer_id, updated_at DESC);
@@ -386,6 +390,7 @@ COMMENT ON COLUMN chat_feedback.comment IS '脱敏并限制长度的补充说明
 COMMENT ON COLUMN chat_feedback.created_at IS '首次提交时间';
 COMMENT ON COLUMN chat_feedback.updated_at IS '最近更新时间';
 COMMENT ON CONSTRAINT ck_chat_feedback_rating ON chat_feedback IS '限制评价方向为 UP 或 DOWN';
+COMMENT ON CONSTRAINT ck_chat_feedback_reason ON chat_feedback IS '点踩必须选择受控原因，点赞不携带负向原因';
 
 COMMENT ON TABLE agent_trace IS 'Agent 节点级执行追踪与审计记录';
 COMMENT ON COLUMN agent_trace.id IS 'Trace 记录数据库主键';

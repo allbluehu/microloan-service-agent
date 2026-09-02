@@ -252,6 +252,91 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void feedbackRatingAndReasonMustBeConsistent() throws Exception {
+        String token = login("C10001");
+
+        mockMvc.perform(post("/api/v1/chat/messages/UNKNOWN/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"DOWN"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+        mockMvc.perform(post("/api/v1/chat/messages/UNKNOWN/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"UP","reason":"NOT_HELPFUL"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void customerCanReloadSubmittedFeedbackButOtherCustomerCannot() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-FEEDBACK-READ/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-FEEDBACK-READ","content":"查询还款记录","selectedLoanId":"L10001"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/chat/messages/M-FEEDBACK-READ/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"DOWN","reason":"NOT_HELPFUL","comment":"没有解决问题"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/chat/messages/M-FEEDBACK-READ/feedback")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rating").value("DOWN"))
+                .andExpect(jsonPath("$.reason").value("NOT_HELPFUL"))
+                .andExpect(jsonPath("$.comment").value("没有解决问题"));
+
+        String otherCustomerToken = login("C10002");
+        mockMvc.perform(get("/api/v1/chat/messages/M-FEEDBACK-READ/feedback")
+                        .header("Authorization", "Bearer " + otherCustomerToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void recentMessagesIncludeOwnedFeedbackWithoutAdditionalLookup() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-FEEDBACK-LIST/messages")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-FEEDBACK-LIST","content":"查询还款记录","selectedLoanId":"L10001"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/chat/messages/M-FEEDBACK-LIST/feedback")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rating":"DOWN","reason":"NOT_HELPFUL","comment":"希望展示更多记录"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/chat/sessions/S-FEEDBACK-LIST/messages")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.role == 'ASSISTANT')].feedbackRating")
+                        .value(org.hamcrest.Matchers.contains("DOWN")))
+                .andExpect(jsonPath("$[?(@.role == 'ASSISTANT')].feedbackReason")
+                        .value(org.hamcrest.Matchers.contains("NOT_HELPFUL")))
+                .andExpect(jsonPath("$[?(@.role == 'ASSISTANT')].feedbackComment")
+                        .value(org.hamcrest.Matchers.contains("希望展示更多记录")))
+                .andExpect(jsonPath("$[?(@.role == 'USER')].feedbackRating")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
+    }
+
+    @Test
     void conversationReusesOnlyPreviouslySelectedResourceIdentifier() throws Exception {
         String token = login("C10001");
         mockMvc.perform(post("/api/v1/chat/sessions/S-CONTEXT-1/messages")

@@ -48,9 +48,13 @@ public interface ChatHistoryMapper {
     void touchSession(@Param("sessionDbId") Long sessionDbId);
 
     @Select("""
-            SELECT m.message_id, m.role, m.content, m.intent, m.trace_id, m.created_at
+            SELECT m.message_id, m.role, m.content, m.intent, m.trace_id, m.created_at,
+                   f.rating AS feedback_rating, f.reason AS feedback_reason,
+                   f.comment AS feedback_comment, f.updated_at AS feedback_updated_at
             FROM chat_message m
             JOIN chat_session s ON s.id = m.session_id
+            LEFT JOIN chat_feedback f
+              ON f.chat_message_id = m.id AND f.customer_id = s.customer_id
             WHERE s.session_id = #{sessionId} AND s.customer_id = #{customerId}
             ORDER BY m.created_at DESC, m.id DESC
             LIMIT #{limit}

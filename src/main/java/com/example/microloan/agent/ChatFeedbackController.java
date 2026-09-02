@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,6 +27,12 @@ public class ChatFeedbackController {
                                    @Valid @RequestBody FeedbackRequest request) {
         return feedbackService.submit(principal.customerId(), messageId,
                 request.rating(), request.reason(), request.comment());
+    }
+
+    @GetMapping("/{messageId}/feedback")
+    public ChatFeedbackView find(@AuthenticationPrincipal CustomerPrincipal principal,
+                                 @PathVariable String messageId) {
+        return feedbackService.find(principal.customerId(), messageId);
     }
 
     public record FeedbackRequest(

@@ -98,14 +98,19 @@ public class IntentClassifier {
         if (message.contains("提前结清") || message.contains("提前还清")) {
             return Intent.EARLY_SETTLEMENT_QUOTE;
         }
+        boolean generalApplicationMaterials = message.contains("申请材料")
+                && !(message.contains("缺") || message.contains("补") || message.contains("提交")
+                || message.contains("进度") || message.contains("状态"));
         boolean knowledgeTopic = message.contains("申请条件") || message.contains("需要什么材料")
                 || message.contains("准备什么") || message.contains("多少期") || message.contains("期限")
-                || message.contains("利率") || message.contains("费用") || message.contains("办理流程");
+                || message.contains("利率") || message.contains("费用") || message.contains("办理流程")
+                || message.contains("申请流程") || generalApplicationMaterials;
         if (knowledgeTopic) {
             return Intent.KNOWLEDGE_QUERY;
         }
         boolean historicalPayment = message.contains("还款记录") || message.contains("支付记录")
-                || message.contains("还款历史") || message.contains("还款成功") || message.contains("扣款记录");
+                || message.contains("还款历史") || message.contains("历史还款")
+                || message.contains("还款成功") || message.contains("扣款记录");
         if (historicalPayment) {
             return Intent.PAYMENT_RECORDS_QUERY;
         }
