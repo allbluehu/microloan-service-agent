@@ -131,15 +131,17 @@ public class AgentOrchestrator {
             // 多个普通业务动作不猜测执行顺序，避免一次消息触发客户未确认的组合操作。
             if (compositeIntentDetector.requiresClarification(state.content())) {
                 AgentState result = state.withIntent(Intent.CLARIFICATION_REQUIRED);
-                traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
-                        "intent=" + result.intent() + ",confidence=1.0,source=COMPOSITE_RULE", elapsedMs(started));
+                traceService.intentSuccess(trace, "messageId=" + state.messageId(),
+                        "intent=" + result.intent() + ",confidence=1.0,source=COMPOSITE_RULE", false,
+                        elapsedMs(started));
                 return result;
             }
             IntentClassifier.ClassificationResult classification = intentClassifier.classifyDetailed(state.content());
             AgentState result = state.withIntent(classification.intent());
-            traceService.success(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(),
+            traceService.intentSuccess(trace, "messageId=" + state.messageId(),
                     "intent=" + result.intent() + ",confidence=" + classification.confidence()
-                            + ",source=" + classification.source(), elapsedMs(started));
+                            + ",source=" + classification.source(),
+                    classification.source() == IntentClassifier.ClassificationSource.MODEL, elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
             traceService.failed(trace, "INTENT_CLASSIFIER", "messageId=" + state.messageId(), exception,

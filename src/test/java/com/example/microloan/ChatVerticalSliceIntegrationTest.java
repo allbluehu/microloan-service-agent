@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -98,6 +99,14 @@ class ChatVerticalSliceIntegrationTest {
     }
 
     @Test
+    void chatTestPageIsAvailableWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/chat.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"login\"")));
+    }
+
+    @Test
     void readinessProbeIncludesAvailableDatabaseWithoutExposingDetails() throws Exception {
         mockMvc.perform(get("/actuator/health/readiness"))
                 .andExpect(status().isOk())
@@ -134,6 +143,9 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$[0].nodeName").value("RISK_CLASSIFIER"))
                 .andExpect(jsonPath("$[0].inputSummary").value("messageId=M10001"))
                 .andExpect(jsonPath("$[1].nodeName").value("INTENT_CLASSIFIER"))
+                .andExpect(jsonPath("$[1].outputSummary").value(org.hamcrest.Matchers.containsString("source=RULE")))
+                .andExpect(jsonPath("$[1].modelVersion").doesNotExist())
+                .andExpect(jsonPath("$[1].promptVersion").value(IntentClassifier.PROMPT_VERSION))
                 .andExpect(jsonPath("$[2].nodeName").value("ROUTE_DECISION"))
                 .andExpect(jsonPath("$[3].nodeName").value("TOOL_EXECUTOR"))
                 .andExpect(jsonPath("$[3].outputSummary").value("resultType=Repayment"));

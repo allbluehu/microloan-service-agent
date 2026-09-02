@@ -22,6 +22,8 @@ docker compose up -d postgres
 mvn spring-boot:run
 ```
 
+启动后可打开 `http://localhost:8080/chat.html`，使用演示客户登录并进行可视化对话测试。
+
 登录演示客户：
 
 ```bash
@@ -39,4 +41,4 @@ curl -s http://localhost:8080/api/v1/chat/sessions/S10001/messages \
   -d '{"messageId":"M10001","content":"我下个月要还多少钱？","selectedLoanId":"L10001"}'
 ```
 
-默认禁用真实模型，意图分类使用窄规则降级，知识问答只使用全文检索。接入 OpenAI 兼容服务时参考 `.env.example`：将 `AI_CHAT_MODEL` 和 `AI_EMBEDDING_MODEL` 设置为 `openai`，完成向量索引后启用 `KNOWLEDGE_VECTOR_ENABLED`。更多设计资料见 [文档中心](docs/README.md)。
+默认禁用真实模型，意图分类使用窄规则降级，知识问答只使用全文检索。项目选用 GLM 的 OpenAI 兼容接口：参考 `.env.example` 配置 `GLM_API_KEY`，将 `AI_CHAT_MODEL` 设置为 `openai` 即可启用意图分类；需要向量检索时再将 `AI_EMBEDDING_MODEL` 设置为 `openai`，使用 `embedding-3` 完成全部知识切片索引后启用 `KNOWLEDGE_VECTOR_ENABLED`。更多设计资料见 [文档中心](docs/README.md)。

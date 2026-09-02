@@ -10,6 +10,7 @@ build/
 # 环境变量与密钥（仓库只提交 .env.example）
 .env
 .env.local
+application.local.yml
 
 # 日志
 *.log

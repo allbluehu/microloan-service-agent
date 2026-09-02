@@ -2,8 +2,12 @@ package com.example.microloan.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class IntentClassifierTest {
@@ -97,5 +101,54 @@ class IntentClassifierTest {
         assertThat(classifier.parseModelOutput(
                 "{\"intent\":\"HUMAN_HANDOFF\",\"confidence\":1.2}"))
                 .isNull();
+    }
+
+    @Test
+    void fallsBackToRulesWhenProviderReturnsRateLimit() {
+        IntentClassifier classifier = classifierWithModelFailure(
+                new TransientAiException("HTTP 429 - model overloaded"));
+
+        IntentClassifier.ClassificationResult result = classifier.classifyDetailed("我下个月要还多少钱？");
+
+        assertThat(result.intent()).isEqualTo(Intent.NEXT_REPAYMENT_QUERY);
+        assertThat(result.source()).isEqualTo(IntentClassifier.ClassificationSource.RULE);
+    }
+
+    @Test
+    void fallsBackToRulesWhenModelReturnsInvalidJson() {
+        IntentClassifier.ClassificationResult result = classifierWithModelOutput("下一期账单查询")
+                .classifyDetailed("我下个月要还多少钱？");
+
+        assertThat(result.intent()).isEqualTo(Intent.NEXT_REPAYMENT_QUERY);
+        assertThat(result.source()).isEqualTo(IntentClassifier.ClassificationSource.RULE);
+    }
+
+    @Test
+    void fallsBackToRulesWhenModelConfidenceIsBelowGate() {
+        IntentClassifier.ClassificationResult result = classifierWithModelOutput(
+                        "{\"intent\":\"NEXT_REPAYMENT_QUERY\",\"confidence\":0.74}")
+                .classifyDetailed("我下个月要还多少钱？");
+
+        assertThat(result.intent()).isEqualTo(Intent.NEXT_REPAYMENT_QUERY);
+        assertThat(result.source()).isEqualTo(IntentClassifier.ClassificationSource.RULE);
+    }
+
+    private IntentClassifier classifierWithModelOutput(String output) {
+        ChatModel model = mock(ChatModel.class);
+        when(model.call(org.mockito.ArgumentMatchers.anyString())).thenReturn(output);
+        return classifierWithModel(model);
+    }
+
+    private IntentClassifier classifierWithModelFailure(RuntimeException exception) {
+        ChatModel model = mock(ChatModel.class);
+        when(model.call(org.mockito.ArgumentMatchers.anyString())).thenThrow(exception);
+        return classifierWithModel(model);
+    }
+
+    private IntentClassifier classifierWithModel(ChatModel model) {
+        StaticListableBeanFactory beans = new StaticListableBeanFactory();
+        beans.addBean("chatModel", model);
+        return new IntentClassifier(beans.getBeanProvider(ChatModel.class),
+                new ObjectMapper(), new ModelCallExecutor(java.time.Duration.ofSeconds(1)));
     }
 }

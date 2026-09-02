@@ -23,7 +23,7 @@ public class KnowledgeEmbeddingIndexer implements ApplicationRunner {
 
     public KnowledgeEmbeddingIndexer(KnowledgeMapper knowledgeMapper,
                                      EmbeddingModel embeddingModel,
-                                     @Value("${knowledge.vector.model:text-embedding-3-small}") String modelName) {
+                                     @Value("${knowledge.vector.model:embedding-3}") String modelName) {
         this.knowledgeMapper = knowledgeMapper;
         this.embeddingModel = embeddingModel;
         this.modelName = modelName;
@@ -34,7 +34,7 @@ public class KnowledgeEmbeddingIndexer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         List<KnowledgeChunkForEmbedding> chunks = knowledgeMapper.findChunksRequiringEmbedding(modelName);
         for (KnowledgeChunkForEmbedding chunk : chunks) {
-            // Persist the model name with each vector so a model change triggers a controlled reindex.
+            // 向量同时记录模型名，切换模型后可自动识别并受控重建旧索引。
             String vector = KnowledgeVectorCodec.encode(
                     embeddingModel.embed(chunk.content()), EMBEDDING_DIMENSIONS);
             knowledgeMapper.updateEmbedding(chunk.id(), vector, modelName);

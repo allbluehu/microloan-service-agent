@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
@@ -13,9 +14,12 @@ public class AgentTraceService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AgentTraceService.class);
     private final AgentTraceMapper traceMapper;
+    private final String chatModelVersion;
 
-    public AgentTraceService(AgentTraceMapper traceMapper) {
+    public AgentTraceService(AgentTraceMapper traceMapper,
+                             @Value("${spring.ai.openai.chat.options.model:unconfigured}") String chatModelVersion) {
         this.traceMapper = traceMapper;
+        this.chatModelVersion = chatModelVersion;
     }
 
     public TraceContext start(String traceId, String sessionId, Long customerId) {
@@ -24,13 +28,21 @@ public class AgentTraceService {
 
     public void success(TraceContext context, String nodeName, String inputSummary, String outputSummary,
                         long latencyMs) {
-        record(context, nodeName, inputSummary, outputSummary, latencyMs, "SUCCESS");
+        record(context, nodeName, inputSummary, outputSummary, null, null, latencyMs, "SUCCESS");
+    }
+
+    public void intentSuccess(TraceContext context, String inputSummary, String outputSummary,
+                              boolean modelUsed, long latencyMs) {
+        // 只有模型结果真正通过协议与置信度门槛时才记录模型版本，规则降级不能伪装成模型成功。
+        record(context, "INTENT_CLASSIFIER", inputSummary, outputSummary,
+                modelUsed ? chatModelVersion : null, IntentClassifier.PROMPT_VERSION, latencyMs, "SUCCESS");
     }
 
     public void failed(TraceContext context, String nodeName, String inputSummary, RuntimeException exception,
                        long latencyMs) {
         // Exception type is enough for diagnosis here; messages may contain business or customer data.
         record(context, nodeName, inputSummary, "exception=" + exception.getClass().getSimpleName(),
+                null, "INTENT_CLASSIFIER".equals(nodeName) ? IntentClassifier.PROMPT_VERSION : null,
                 latencyMs, "FAILED");
     }
 
@@ -39,11 +51,11 @@ public class AgentTraceService {
     }
 
     private void record(TraceContext context, String nodeName, String inputSummary, String outputSummary,
-                        long latencyMs, String status) {
+                        String modelVersion, String promptVersion, long latencyMs, String status) {
         try {
             traceMapper.insert(context.traceId(), context.sessionId(), context.customerId(),
                     context.sequence().incrementAndGet(), nodeName, limit(inputSummary, 300), limit(outputSummary, 500),
-                    null, "INTENT_CLASSIFIER".equals(nodeName) ? IntentClassifier.PROMPT_VERSION : null,
+                    modelVersion, promptVersion,
                     latencyMs, status);
         } catch (DataAccessException exception) {
             // Observability loss is reported locally but must not replace the customer-facing business outcome.

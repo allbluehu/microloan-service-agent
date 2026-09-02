@@ -20,16 +20,20 @@ spring:
       chat: ${AI_CHAT_MODEL:none}
       embedding: ${AI_EMBEDDING_MODEL:none}
     openai:
-      api-key: ${OPENAI_API_KEY:unused-when-ai-disabled}
-      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      # GLM 提供 OpenAI 兼容协议，因此继续复用 Spring AI OpenAI Starter。
+      api-key: ${GLM_API_KEY:unused-when-ai-disabled}
+      base-url: ${GLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
       chat:
+        completions-path: ${GLM_CHAT_COMPLETIONS_PATH:/chat/completions}
         options:
-          model: ${OPENAI_MODEL:gpt-4.1-mini}
+          model: ${GLM_CHAT_MODEL:glm-4.7-flash}
           temperature: 0
       embedding:
+        embeddings-path: ${GLM_EMBEDDINGS_PATH:/embeddings}
         options:
-          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
-          dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1024}
+          # 数据库列固定为 VECTOR(1024)，切换维度前必须同步修改 DDL 并重建全部向量。
+          model: ${GLM_EMBEDDING_MODEL:embedding-3}
+          dimensions: ${GLM_EMBEDDING_DIMENSIONS:1024}
 
 knowledge:
   ingestion:
@@ -41,7 +45,7 @@ knowledge:
   vector:
     enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
     indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}
-    model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    model: ${GLM_EMBEDDING_MODEL:embedding-3}
 
 agent:
   model-call:
