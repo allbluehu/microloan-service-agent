@@ -24,20 +24,20 @@ spring:
       chat: ${AI_CHAT_MODEL:none}
       embedding: ${AI_EMBEDDING_MODEL:none}
     openai:
-      # GLM 提供 OpenAI 兼容协议，因此继续复用 Spring AI OpenAI Starter。
-      api-key: ${GLM_API_KEY:unused-when-ai-disabled}
-      base-url: ${GLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+      # 百炼、GLM 等供应商均通过 OpenAI 兼容协议接入，业务代码不绑定具体厂商 SDK。
+      api-key: ${AI_API_KEY:unused-when-ai-disabled}
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       chat:
-        completions-path: ${GLM_CHAT_COMPLETIONS_PATH:/chat/completions}
+        completions-path: ${AI_CHAT_COMPLETIONS_PATH:/chat/completions}
         options:
-          model: ${GLM_CHAT_MODEL:glm-4.6}
+          model: ${AI_CHAT_MODEL_NAME:qwen-plus}
           temperature: 0
       embedding:
-        embeddings-path: ${GLM_EMBEDDINGS_PATH:/embeddings}
+        embeddings-path: ${AI_EMBEDDINGS_PATH:/embeddings}
         options:
           # 数据库列固定为 VECTOR(1024)，切换维度前必须同步修改 DDL 并重建全部向量。
-          model: ${GLM_EMBEDDING_MODEL:embedding-3}
-          dimensions: ${GLM_EMBEDDING_DIMENSIONS:1024}
+          model: ${AI_EMBEDDING_MODEL_NAME:text-embedding-v4}
+          dimensions: ${AI_EMBEDDING_DIMENSIONS:1024}
 
 knowledge:
   admin:
@@ -52,9 +52,13 @@ knowledge:
   vector:
     enabled: ${KNOWLEDGE_VECTOR_ENABLED:false}
     indexing-enabled: ${KNOWLEDGE_VECTOR_INDEXING_ENABLED:false}
-    model: ${GLM_EMBEDDING_MODEL:embedding-3}
+    model: ${AI_EMBEDDING_MODEL_NAME:text-embedding-v4}
 
 agent:
+  risk:
+    # 默认关闭风险模型，明确规则始终生效；开启后用于补充识别隐晦风险。
+    model-enabled: ${AI_RISK_MODEL_ENABLED:false}
+    model-confidence-threshold: ${AI_RISK_MODEL_CONFIDENCE_THRESHOLD:0.75}
   model-call:
     # 覆盖 Spring AI 内部有限重试在内的整次分类调用预算。
     timeout: ${AI_MODEL_CALL_TIMEOUT:3s}

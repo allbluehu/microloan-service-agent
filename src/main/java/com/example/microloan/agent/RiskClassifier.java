@@ -1,34 +1,34 @@
 package com.example.microloan.agent;
 
-import com.example.microloan.ticket.TicketType;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
+/** 组合规则、可选模型与安全决策策略的风险识别门面。 */
 @Component
 public class RiskClassifier {
 
-    public RiskAssessment classify(String content) {
-        String normalized = content.toLowerCase();
-        if (containsAny(normalized, "冒名", "不是我申请", "非本人贷款")) {
-            return new RiskAssessment(RiskLevel.HIGH, TicketType.IDENTITY_THEFT);
-        }
-        if (containsAny(normalized, "隐私泄露", "泄露我的信息", "告诉同事", "告诉家人")) {
-            return new RiskAssessment(RiskLevel.HIGH, TicketType.PRIVACY_BREACH);
-        }
-        if (normalized.contains("催收") && containsAny(normalized, "威胁", "恐吓", "辱骂", "投诉")) {
-            return new RiskAssessment(RiskLevel.HIGH, TicketType.COLLECTION_COMPLAINT);
-        }
-        if (normalized.contains("投诉")) {
-            return new RiskAssessment(RiskLevel.HIGH, TicketType.GENERAL_COMPLAINT);
-        }
-        return RiskAssessment.low();
+    private final RuleRiskClassifier ruleClassifier;
+    private final ModelRiskClassifier modelClassifier;
+    private final RiskDecisionPolicy decisionPolicy;
+
+    @Autowired
+    public RiskClassifier(RuleRiskClassifier ruleClassifier, ModelRiskClassifier modelClassifier,
+                          RiskDecisionPolicy decisionPolicy) {
+        this.ruleClassifier = ruleClassifier;
+        this.modelClassifier = modelClassifier;
+        this.decisionPolicy = decisionPolicy;
     }
 
-    private boolean containsAny(String content, String... terms) {
-        for (String term : terms) {
-            if (content.contains(term)) {
-                return true;
-            }
-        }
-        return false;
+    RiskClassifier(RuleRiskClassifier ruleClassifier, RiskDecisionPolicy decisionPolicy) {
+        this(ruleClassifier, null, decisionPolicy);
+    }
+
+    public RiskAssessment classify(String content) {
+        RiskAssessment rule = ruleClassifier.classify(content);
+        // 明确规则命中后不再调用外部模型，降低延迟且不允许模型覆盖确定性高风险结果。
+        return rule.level() == RiskLevel.HIGH
+                ? rule
+                : decisionPolicy.decide(rule,
+                        modelClassifier == null ? java.util.Optional.empty() : modelClassifier.classify(content));
     }
 }

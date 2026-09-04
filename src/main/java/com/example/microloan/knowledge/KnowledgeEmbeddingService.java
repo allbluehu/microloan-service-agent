@@ -23,7 +23,7 @@ public class KnowledgeEmbeddingService {
 
     public KnowledgeEmbeddingService(KnowledgeMapper knowledgeMapper,
                                      ObjectProvider<EmbeddingModel> embeddingModelProvider,
-                                     @Value("${knowledge.vector.model:embedding-3}") String modelName) {
+                                     @Value("${knowledge.vector.model:text-embedding-v4}") String modelName) {
         this.knowledgeMapper = knowledgeMapper;
         this.embeddingModelProvider = embeddingModelProvider;
         this.modelName = modelName;

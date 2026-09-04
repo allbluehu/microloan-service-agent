@@ -18,7 +18,8 @@ class AgentRoutingEvaluationTest {
     private final IntentClassifier intentClassifier = new IntentClassifier(
             new StaticListableBeanFactory().getBeanProvider(org.springframework.ai.chat.model.ChatModel.class),
             objectMapper, new ModelCallExecutor(java.time.Duration.ofSeconds(3)));
-    private final RiskClassifier riskClassifier = new RiskClassifier();
+    private final RiskClassifier riskClassifier = new RiskClassifier(
+            new RuleRiskClassifier(), new RiskDecisionPolicy(0.75));
     private final CompositeIntentDetector compositeIntentDetector = new CompositeIntentDetector();
 
     @Test

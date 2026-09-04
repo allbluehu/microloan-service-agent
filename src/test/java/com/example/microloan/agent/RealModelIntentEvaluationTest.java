@@ -28,8 +28,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 /**
- * GLM 真实意图分类质量门禁。
- * 调用链为“版本化样本 → 与生产一致的风险/复合意图前置过滤 → HTTP 调用 GLM → IntentClassifier 严格协议解析
+ * OpenAI 兼容供应商真实意图分类质量门禁。
+ * 调用链为“版本化样本 → 与生产一致的风险/复合意图前置过滤 → HTTP 调用供应商 → IntentClassifier 严格协议解析
  * → 聚合质量指标 → 先落盘报告再断言门槛”。使用显式开关，普通测试不会访问外部模型或消耗额度。
  */
 @EnabledIfEnvironmentVariable(named = "REAL_MODEL_EVAL_ENABLED", matches = "true")
@@ -41,16 +41,18 @@ class RealModelIntentEvaluationTest {
     private final IntentClassifier classifier = new IntentClassifier(
             new StaticListableBeanFactory().getBeanProvider(org.springframework.ai.chat.model.ChatModel.class),
             objectMapper, new ModelCallExecutor(Duration.ofSeconds(3)));
-    private final RiskClassifier riskClassifier = new RiskClassifier();
+    private final RiskClassifier riskClassifier = new RiskClassifier(
+            new RuleRiskClassifier(), new RiskDecisionPolicy(0.75));
     private final CompositeIntentDetector compositeIntentDetector = new CompositeIntentDetector();
 
     @Test
     void realModelMeetsVersionedIntentQualityGates() throws Exception {
         // 模型、端点、节流和质量门槛全部来自环境变量，使同一评测代码可复现不同部署配置。
-        String apiKey = requiredEnvironment("GLM_API_KEY");
-        String baseUrl = environment("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4");
-        String path = environment("GLM_CHAT_COMPLETIONS_PATH", "/chat/completions");
-        String model = environment("GLM_CHAT_MODEL", "glm-4.6");
+        String provider = environment("AI_PROVIDER", "BAILIAN");
+        String apiKey = requiredEnvironment("AI_API_KEY");
+        String baseUrl = environment("AI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
+        String path = environment("AI_CHAT_COMPLETIONS_PATH", "/chat/completions");
+        String model = environment("AI_CHAT_MODEL_NAME", "qwen-plus");
         long intervalMs = Long.parseLong(environment("REAL_MODEL_EVAL_INTERVAL_MS", "500"));
         double accuracyGate = Double.parseDouble(environment("REAL_MODEL_EVAL_MIN_ACCURACY", "0.90"));
         double protocolGate = Double.parseDouble(environment("REAL_MODEL_EVAL_MIN_PROTOCOL_RATE", "0.95"));
@@ -132,7 +134,7 @@ class RealModelIntentEvaluationTest {
         // 报告绑定模型、提示词和数据集哈希，后续比较准确率时不会混淆输入版本。
         report.put("schemaVersion", "intent-evaluation-v1");
         report.put("generatedAt", Instant.now().toString());
-        report.put("provider", "GLM");
+        report.put("provider", provider);
         report.put("modelVersion", model);
         report.put("promptVersion", IntentClassifier.PROMPT_VERSION);
         report.put("dataset", "agent-routing-baseline.json");

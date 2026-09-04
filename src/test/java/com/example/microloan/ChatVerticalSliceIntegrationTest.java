@@ -146,7 +146,7 @@ class ChatVerticalSliceIntegrationTest {
         mockMvc.perform(get("/api/v1/agent/traces/{traceId}", traceId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$.length()").value(6))
                 .andExpect(jsonPath("$[0].nodeName").value("RISK_CLASSIFIER"))
                 .andExpect(jsonPath("$[0].inputSummary").value("messageId=M10001"))
                 .andExpect(jsonPath("$[1].nodeName").value("INTENT_CLASSIFIER"))
@@ -154,8 +154,9 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$[1].modelVersion").doesNotExist())
                 .andExpect(jsonPath("$[1].promptVersion").value(IntentClassifier.PROMPT_VERSION))
                 .andExpect(jsonPath("$[2].nodeName").value("ROUTE_DECISION"))
-                .andExpect(jsonPath("$[4].nodeName").value("OUTPUT_GUARDRAIL"))
-                .andExpect(jsonPath("$[4].outputSummary").value("changed=false,reason=PASSED"))
+                .andExpect(jsonPath("$[4].nodeName").value("RESULT_VERIFIER"))
+                .andExpect(jsonPath("$[5].nodeName").value("OUTPUT_GUARDRAIL"))
+                .andExpect(jsonPath("$[5].outputSummary").value("changed=false,reason=PASSED"))
                 .andExpect(jsonPath("$[3].nodeName").value("TOOL_EXECUTOR"))
                 .andExpect(jsonPath("$[3].outputSummary").value("resultType=Repayment"));
 
@@ -545,7 +546,7 @@ class ChatVerticalSliceIntegrationTest {
         String traceId = response.path("traceId").asText();
         assertThat(result.getResponse().getHeader("X-Trace-Id")).isEqualTo(traceId);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM agent_trace WHERE trace_id = ?", Integer.class, traceId)).isEqualTo(5);
+                "SELECT COUNT(*) FROM agent_trace WHERE trace_id = ?", Integer.class, traceId)).isEqualTo(6);
     }
 
     @Test

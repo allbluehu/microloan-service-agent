@@ -29,8 +29,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * 真实 GLM 向量与混合召回端到端评测。
- * 调用链覆盖“Flyway 建库 → classpath 文档导入草稿 → 审批/发布 → embedding-3 建索引 →
+ * OpenAI 兼容供应商真实向量与混合召回端到端评测。
+ * 调用链覆盖“Flyway 建库 → classpath 文档导入草稿 → 审批/发布 → Embedding 建索引 →
  * PostgreSQL 全文与 pgvector 双路召回 → RRF → 确定性重排 → KnowledgeService 引用”，
  * 并使用一次性 Testcontainers 数据库隔离开发数据。必须显式开启，避免常规测试访问外部服务和消耗额度。
  */
@@ -45,7 +45,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @EnabledIfEnvironmentVariable(named = "REAL_EMBEDDING_EVAL_ENABLED", matches = "true")
 class RealEmbeddingHybridEvaluationTest {
 
-    private static final String MODEL = "embedding-3";
+    private static final String MODEL = environment("AI_EMBEDDING_MODEL_NAME", "text-embedding-v4");
+    private static final String PROVIDER = environment("AI_PROVIDER", "BAILIAN");
     private static final int EXPECTED_DIMENSIONS = 1024;
     private static final List<String> DOCUMENTS = List.of(
             "KB-MB-MATERIALS", "KB-MB-ELIGIBILITY", "KB-MB-PROCESS", "KB-MB-TERM",
@@ -141,7 +142,7 @@ class RealEmbeddingHybridEvaluationTest {
         // 绑定数据集哈希、模型和维度，使后续更换知识或模型时的召回率可以正确归因。
         report.put("schemaVersion", "embedding-hybrid-evaluation-v1");
         report.put("generatedAt", Instant.now().toString());
-        report.put("provider", "GLM");
+        report.put("provider", PROVIDER);
         report.put("modelVersion", MODEL);
         report.put("dimensions", probe.length);
         report.put("dataset", "embedding-hybrid-baseline.json");
@@ -171,5 +172,10 @@ class RealEmbeddingHybridEvaluationTest {
         assertThat(knowledgeService.answer("开小店的老板办借款要带哪些证明？",
                 "PERSONAL_CONSUMER", "ALL").sources())
                 .noneMatch(source -> source.documentId().startsWith("KB-MB-"));
+    }
+
+    private static String environment(String name, String defaultValue) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 }

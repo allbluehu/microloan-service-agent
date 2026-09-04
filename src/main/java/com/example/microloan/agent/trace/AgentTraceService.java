@@ -1,6 +1,9 @@
 package com.example.microloan.agent.trace;
 
 import com.example.microloan.agent.IntentClassifier;
+import com.example.microloan.agent.ModelRiskClassifier;
+import com.example.microloan.agent.RiskAssessment;
+import com.example.microloan.agent.RiskSource;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
@@ -40,6 +43,17 @@ public class AgentTraceService {
         // 只有模型结果真正通过协议与置信度门槛时才记录模型版本，规则降级不能伪装成模型成功。
         record(context, "INTENT_CLASSIFIER", inputSummary, outputSummary,
                 modelUsed ? chatModelVersion : null, IntentClassifier.PROMPT_VERSION, latencyMs, "SUCCESS");
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void riskSuccess(TraceContext context, String inputSummary, RiskAssessment assessment, long latencyMs) {
+        String output = "riskLevel=" + assessment.level() + ",category=" + assessment.category()
+                + ",source=" + assessment.source() + ",confidence=" + assessment.confidence()
+                + ",ruleCode=" + assessment.ruleCode() + ",ticketType=" + assessment.ticketType();
+        boolean modelUsed = assessment.source() == RiskSource.MODEL;
+        record(context, "RISK_CLASSIFIER", inputSummary, output,
+                modelUsed ? chatModelVersion : null, modelUsed ? ModelRiskClassifier.PROMPT_VERSION : null,
+                latencyMs, "SUCCESS");
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

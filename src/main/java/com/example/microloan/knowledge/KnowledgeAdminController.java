@@ -4,9 +4,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
+
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -93,12 +95,14 @@ public class KnowledgeAdminController {
     public record MarkdownImportRequest(
             /** 包含受控元数据头和正文的完整 Markdown。 */
             @NotBlank @Size(max = 1_048_576) String markdown
-    ) {}
+    ) {
+    }
 
     public record ApprovalRequest(
             /** 对本知识版本承担审核责任的人员标识。 */
             @NotBlank @Size(max = 100) String reviewer
-    ) {}
+    ) {
+    }
 
     public record PdfImportMetadataRequest(
             /** 知识文档的稳定业务编号。 */
@@ -119,5 +123,6 @@ public class KnowledgeAdminController {
             LocalDate effectiveTo,
             /** 用于全文检索的受控业务关键词。 */
             @NotEmpty @Size(max = 30) List<@NotBlank @Size(max = 50) String> keywords
-    ) {}
+    ) {
+    }
 }

@@ -23,18 +23,20 @@ public class AgentOrchestrator {
     private final ChatHistoryService chatHistoryService;
     private final CompositeIntentDetector compositeIntentDetector;
     private final AgentRouteExecutor routeExecutor;
+    private final ResultVerifier resultVerifier;
     private final OutputGuardrail outputGuardrail;
 
     public AgentOrchestrator(IntentClassifier intentClassifier, RiskClassifier riskClassifier,
                              AgentTraceService traceService, ChatHistoryService chatHistoryService,
                              CompositeIntentDetector compositeIntentDetector, AgentRouteExecutor routeExecutor,
-                             OutputGuardrail outputGuardrail) {
+                             ResultVerifier resultVerifier, OutputGuardrail outputGuardrail) {
         this.intentClassifier = intentClassifier;
         this.riskClassifier = riskClassifier;
         this.traceService = traceService;
         this.chatHistoryService = chatHistoryService;
         this.compositeIntentDetector = compositeIntentDetector;
         this.routeExecutor = routeExecutor;
+        this.resultVerifier = resultVerifier;
         this.outputGuardrail = outputGuardrail;
     }
 
@@ -75,7 +77,22 @@ public class AgentOrchestrator {
             AgentState routedState = state;
             completed = traceExecution(trace, routedState, () -> routeExecutor.execute(routedState));
         }
+        completed = traceVerification(trace, completed);
         return finalizeResponse(trace, sessionContext.id(), request.messageId(), completed);
+    }
+
+    private AgentState traceVerification(TraceContext trace, AgentState state) {
+        long started = System.nanoTime();
+        try {
+            AgentState verified = resultVerifier.verify(state);
+            traceService.success(trace, "RESULT_VERIFIER", "intent=" + state.intent(),
+                    "result=VALID", elapsedMs(started));
+            return verified;
+        } catch (RuntimeException exception) {
+            traceService.failed(trace, "RESULT_VERIFIER", "intent=" + state.intent(), exception,
+                    elapsedMs(started));
+            throw new ToolUnavailableException(exception);
+        }
     }
 
     private AgentState finalizeResponse(TraceContext trace, Long sessionDbId, String messageId,
@@ -92,9 +109,9 @@ public class AgentOrchestrator {
     private AgentState traceRisk(TraceContext trace, AgentState state) {
         long started = System.nanoTime();
         try {
-            AgentState result = state.withRisk(riskClassifier.classify(state.content()));
-            traceService.success(trace, "RISK_CLASSIFIER", "messageId=" + state.messageId(),
-                    "riskLevel=" + result.riskLevel() + ",ticketType=" + result.ticketType(), elapsedMs(started));
+            RiskAssessment assessment = riskClassifier.classify(state.content());
+            AgentState result = state.withRisk(assessment);
+            traceService.riskSuccess(trace, "messageId=" + state.messageId(), assessment, elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
             traceService.failed(trace, "RISK_CLASSIFIER", "messageId=" + state.messageId(), exception,

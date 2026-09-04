@@ -12,7 +12,8 @@ import org.junit.jupiter.api.Test;
  */
 class RiskClassifierTest {
 
-    private final RiskClassifier classifier = new RiskClassifier();
+    private final RiskClassifier classifier = new RiskClassifier(
+            new RuleRiskClassifier(), new RiskDecisionPolicy(0.75));
 
     @Test
     void classifiesIdentityTheftAsHighRisk() {
@@ -30,5 +31,14 @@ class RiskClassifierTest {
 
         assertThat(result.level()).isEqualTo(RiskLevel.HIGH);
         assertThat(result.ticketType()).isEqualTo(TicketType.PRIVACY_BREACH);
+    }
+
+    @Test
+    void safelyEscalatesWeakSignalWhenRiskModelIsUnavailable() {
+        RiskAssessment result = classifier.classify("如果还不处理，我只能去楼顶了");
+
+        assertThat(result.level()).isEqualTo(RiskLevel.HIGH);
+        assertThat(result.source()).isEqualTo(RiskSource.SAFE_FALLBACK);
+        assertThat(result.ruleCode()).isEqualTo("RISK_REVIEW_SIGNAL");
     }
 }
