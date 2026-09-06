@@ -22,3 +22,7 @@ logs/
 # 前端（迭代五）
 node_modules/
 dist/
+
+web/node_modules/
+web/test-results/
+web/playwright-report/

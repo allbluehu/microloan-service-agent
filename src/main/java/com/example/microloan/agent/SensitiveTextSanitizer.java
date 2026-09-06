@@ -2,12 +2,12 @@ package com.example.microloan.agent;
 
 import java.util.regex.Pattern;
 
-final class SensitiveTextSanitizer {
+public final class SensitiveTextSanitizer {
     private static final Pattern SENSITIVE_DIGITS = Pattern.compile("(?<!\\d)\\d{6,}(?!\\d)");
 
     private SensitiveTextSanitizer() {}
 
-    static String redactAndLimit(String content, int maxLength) {
+    public static String redactAndLimit(String content, int maxLength) {
         if (maxLength < 1) {
             throw new IllegalArgumentException("Maximum text length must be positive");
         }

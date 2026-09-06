@@ -59,3 +59,9 @@ KNOWLEDGE_ADMIN_API_KEY=请替换为高强度随机值
 
 服务启动后可访问 `http://localhost:8080/knowledge-admin.html` 使用知识管理台。页面支持 Markdown/PDF
 草稿导入、审批、发布、下线和增量向量索引；管理密钥只保存在当前浏览器标签页的 `sessionStorage` 中。
+
+## 客户界面、坐席与自动化回归
+
+`/chat.html` 现由 Vue 3 + TypeScript 提供历史会话、反馈、二次认证、业务卡片、引用、Trace 与 SSE 状态事件。`/support.html` 提供独立坐席密钥保护的工单处理、运行指标和本地评测报告查看。设置 `SUPPORT_API_KEY`（至少 32 字节）后使用坐席入口。前端构建产物随应用提供，演示启动不需要 Node。
+
+完整启动、前端构建、接口、指标口径、断线重试和 8～10 分钟演示脚本见 [交付与演示验收](docs/09-交付与演示验收.md)。GitHub Actions 执行离线 Java 与浏览器回归；真实供应商评测仍需单独显式运行。

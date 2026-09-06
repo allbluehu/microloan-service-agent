@@ -17,6 +17,11 @@ import org.springframework.stereotype.Service;
  */
 public class AgentOrchestrator {
 
+    private io.micrometer.core.instrument.MeterRegistry metrics = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureMetrics(io.micrometer.core.instrument.MeterRegistry registry) { this.metrics = registry; }
+
     private final IntentClassifier intentClassifier;
     private final RiskClassifier riskClassifier;
     private final AgentTraceService traceService;
@@ -49,6 +54,21 @@ public class AgentOrchestrator {
      * @return 包含最终意图、结构化业务结果、客户答案和 traceId 的不可变状态
      */
     public AgentState handle(AgentRequest request, AgentExecutionContext executionContext) {
+        long started = System.nanoTime();
+        String outcome = "failure";
+        try {
+            AgentState result = executeRound(request, executionContext);
+            outcome = "success";
+            return result;
+        } finally {
+            // 固定结果标签覆盖认证后的完整编排，包含模型、工具、校验与消息持久化。
+            io.micrometer.core.instrument.Timer.builder("microloan.agent.round.duration")
+                    .tag("outcome", outcome).publishPercentiles(0.95).register(metrics)
+                    .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
+    }
+
+    private AgentState executeRound(AgentRequest request, AgentExecutionContext executionContext) {
         // 先校验会话归属并合并本轮显式选择，使后续节点使用同一份已持久化上下文快照。
         ChatSessionContext sessionContext = chatHistoryService.recordUserMessage(
                 executionContext.customerId(), request.sessionId(), request.messageId(), request.content(),
@@ -156,11 +176,15 @@ public class AgentOrchestrator {
         long started = System.nanoTime();
         try {
             AgentState result = execution.get();
+            metrics.counter("microloan.agent.tool.calls", "node", nodeName, "outcome",
+                    result.toolResult() == null ? "skipped" : "success").increment();
             String resultType = result.toolResult() == null ? "NONE" : result.toolResult().getClass().getSimpleName();
             traceService.success(trace, nodeName, "intent=" + state.intent(),
                     "resultType=" + resultType, elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
+            metrics.counter("microloan.agent.tool.calls", "node", nodeName,
+                    "outcome", isExpectedBusinessRejection(exception) ? "rejected" : "failure").increment();
             traceService.failed(trace, nodeName, "intent=" + state.intent(), exception,
                     elapsedMs(started));
             if (isExpectedBusinessRejection(exception)) {

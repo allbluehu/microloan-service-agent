@@ -19,14 +19,17 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter,
                                             KnowledgeAdminAuthenticationFilter knowledgeAdminFilter,
-                                            ObjectMapper objectMapper) throws Exception {
+                                            SupportAuthenticationFilter supportFilter, ObjectMapper objectMapper) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 登录入口、人工测试页及容器探针需要在没有客户 JWT 时可访问；业务 API 仍统一鉴权。
+                        // 登录入口、静态界面及容器探针需要在没有客户 JWT 时可访问；业务 API 仍统一鉴权。
                         .requestMatchers("/api/v1/auth/login", "/chat.html", "/knowledge-admin.html",
-                                "/actuator/health", "/actuator/health/**").permitAll()
+                                "/support.html", "/ui/**", "/actuator/health", "/actuator/health/**").permitAll()
+                        // 异步派发仅完成已认证的 SSE 响应，不再次依赖已清理的 Servlet 线程身份。
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/api/v1/support/**").hasRole("SUPPORT")
                         .requestMatchers("/api/v1/admin/knowledge/**").hasRole("KNOWLEDGE_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
@@ -43,6 +46,7 @@ public class SecurityConfig {
                 }))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(knowledgeAdminFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(supportFilter, KnowledgeAdminAuthenticationFilter.class)
                 .build();
     }
 

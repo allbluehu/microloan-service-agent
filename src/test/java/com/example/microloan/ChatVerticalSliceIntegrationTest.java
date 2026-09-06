@@ -50,6 +50,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(properties = {
         "spring.ai.model.chat=none",
+        "support.api-key=test-support-key-at-least-32-bytes!!",
         "knowledge.admin.api-key=test-knowledge-admin-key-32-bytes!!"
 })
 @AutoConfigureMockMvc
@@ -110,7 +111,7 @@ class ChatVerticalSliceIntegrationTest {
         mockMvc.perform(get("/chat.html"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"login\"")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/ui/index.html")));
     }
 
     @Test
@@ -1168,6 +1169,121 @@ class ChatVerticalSliceIntegrationTest {
                 .andExpect(jsonPath("$.intent").value("HUMAN_HANDOFF"))
                 .andExpect(jsonPath("$.businessCard.priority").value("NORMAL"))
                 .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("正在为你转接人工客服")));
+    }
+
+
+    @Test
+    void supportPermissionsTransitionsAndAuditAreIsolated() throws Exception {
+        String key = "test-support-key-at-least-32-bytes!!";
+        String customer = login("C10001");
+        mockMvc.perform(get("/api/v1/support/tickets")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/support/tickets").header("Authorization", "Bearer " + customer))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/support/tickets")
+                        .header("X-Knowledge-Admin-Key", "test-knowledge-admin-key-32-bytes!!"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/chat/sessions").header("X-Support-Key", key))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/chat/sessions/S-SUPPORT/messages")
+                        .header("Authorization", "Bearer " + customer).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-SUPPORT","content":"请转人工客服"}
+                                """))
+                .andExpect(status().isOk());
+        String ticket = jdbcTemplate.queryForObject(
+                "SELECT ticket_no FROM service_ticket WHERE conversation_id = 'S-SUPPORT'", String.class);
+        mockMvc.perform(get("/api/v1/support/tickets").header("X-Support-Key", key))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].ticketId").exists());
+        mockMvc.perform(get("/api/v1/support/tickets/" + ticket + "/context").header("X-Support-Key", key))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(post("/api/v1/support/tickets/" + ticket + "/transition")
+                        .header("X-Support-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedStatus":"OPEN","note":"联系 13812345678 处理中"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/support/tickets/" + ticket + "/transition")
+                        .header("X-Support-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedStatus":"OPEN","note":"重复接单"}
+                                """))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/v1/support/tickets/" + ticket + "/transition")
+                        .header("X-Support-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedStatus":"IN_PROGRESS","note":"已完成处理"}
+                                """))
+                .andExpect(status().isOk());
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM ticket_action WHERE ticket_no = ?",
+                Integer.class, ticket)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("SELECT note FROM ticket_action WHERE ticket_no = ? AND from_status = 'OPEN'",
+                String.class, ticket)).contains("[REDACTED]").doesNotContain("13812345678");
+        mockMvc.perform(get("/api/v1/support/metrics").header("Authorization", "Bearer " + customer))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/support/metrics").header("X-Support-Key", key))
+                .andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.containsString("microloan.agent.round.duration")));
+    }
+
+    @Test
+    void streamPreservesIdentityTraceAndRejectsForeignLoan() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-SSE/messages")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-SSE-BASE","content":"我下个月要还多少钱","selectedLoanId":"L10001"}
+                                """))
+                .andExpect(status().isOk()).andReturn();
+        MvcResult stream = mockMvc.perform(post("/api/v1/chat/sessions/S-SSE/stream")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-SSE","content":"我下个月要还多少钱"}
+                                """))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted())
+                .andReturn();
+        stream.getAsyncResult(10000);
+        MvcResult completed = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(stream))
+                .andExpect(status().isOk()).andReturn();
+        String body = completed.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(body).contains("event:status", "event:answer", "event:done", "L10001")
+                .contains(stream.getResponse().getHeader("X-Trace-Id"));
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM agent_trace WHERE trace_id = ?", Integer.class,
+                stream.getResponse().getHeader("X-Trace-Id"))).isGreaterThan(0);
+        MvcResult rejected = mockMvc.perform(post("/api/v1/chat/sessions/S-SSE-FOREIGN/stream")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-SSE-FOREIGN","content":"我下个月要还多少钱","selectedLoanId":"L20001"}
+                                """))
+                .andReturn();
+        rejected.getAsyncResult(10000);
+        MvcResult error = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(rejected))
+                .andExpect(status().isOk()).andReturn();
+        assertThat(error.getResponse().getContentAsString()).contains("event:error", "ACCESS_DENIED")
+                .doesNotContain("event:answer", "event:done");
+    }
+
+    @Test
+    void persistentContextCanBeRestoredAndClearedOnlyByOwner() throws Exception {
+        String token = login("C10001");
+        mockMvc.perform(post("/api/v1/chat/sessions/S-CONTEXT-RESET/messages")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"messageId":"M-CONTEXT-RESET","content":"我下个月要还多少钱","selectedLoanId":"L10001"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/chat/sessions/S-CONTEXT-RESET/context")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.selectedLoanId").value("L10001"))
+                .andExpect(jsonPath("$.recentIntents[0]").value("NEXT_REPAYMENT_QUERY"));
+        String other = login("C10002");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/api/v1/chat/sessions/S-CONTEXT-RESET/context").header("Authorization", "Bearer " + other))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/api/v1/chat/sessions/S-CONTEXT-RESET/context").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/chat/sessions/S-CONTEXT-RESET/context")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.selectedLoanId").isEmpty());
     }
 
     private String login(String customerNo) throws Exception {

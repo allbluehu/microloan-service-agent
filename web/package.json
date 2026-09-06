@@ -1,0 +1,21 @@
+{
+  "name": "microloan-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "vue-tsc --noEmit",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@vitejs/plugin-vue": "5.2.3",
+    "typescript": "5.7.3",
+    "vite": "6.4.3",
+    "vue-tsc": "2.2.4"
+  }
+}

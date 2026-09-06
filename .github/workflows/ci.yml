@@ -1,0 +1,45 @@
+name: Offline regression
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AI_CHAT_MODEL: none
+      AI_EMBEDDING_MODEL: none
+      REAL_MODEL_EVAL_ENABLED: 'false'
+      REAL_EMBEDDING_EVAL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+      - run: npm run check --prefix web
+      - run: npm run build --prefix web
+      - name: Verify committed browser assets
+        run: git diff --exit-code -- src/main/resources/static/ui
+      - run: npx --prefix web playwright install --with-deps chromium
+      - run: npm run test --prefix web
+      - run: mvn --batch-mode test
+      - name: Generate offline evaluation report
+        if: always()
+        run: python3 scripts/offline-report.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-reports
+          path: |
+            target/surefire-reports/
+            target/evaluation/
+            web/test-results/
+          retention-days: 14

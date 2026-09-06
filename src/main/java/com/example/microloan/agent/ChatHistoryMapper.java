@@ -78,4 +78,11 @@ public interface ChatHistoryMapper {
             """)
     List<ChatSessionView> findRecentOwnedSessions(@Param("customerId") Long customerId,
                                                   @Param("limit") int limit);
+
+    @Update("""
+            UPDATE chat_session SET selected_loan_id = NULL, selected_application_id = NULL,
+                selected_product_code = NULL, selected_region = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = #{sessionId} AND customer_id = #{customerId}
+            """)
+    int clearOwnedContext(@Param("customerId") Long customerId, @Param("sessionId") String sessionId);
 }

@@ -97,3 +97,7 @@ management:
     web:
       exposure:
         include: health,info
+
+support:
+  # 独立坐席密钥，空值时关闭坐席 API。
+  api-key: ${SUPPORT_API_KEY:}

@@ -40,4 +40,38 @@ public interface TicketMapper {
             WHERE st.idempotency_key = #{idempotencyKey}
             """)
     ServiceTicket findByIdempotencyKey(String idempotencyKey);
+
+    @Select("""
+            SELECT st.ticket_no AS ticket_id, st.conversation_id, l.loan_no AS related_loan_id,
+                   st.type, st.priority, st.summary, st.status, st.created_at
+            FROM service_ticket st LEFT JOIN loan l ON l.id = st.related_loan_id
+            WHERE st.status = #{status}
+            ORDER BY CASE WHEN st.priority = 'HIGH' THEN 0 ELSE 1 END, st.created_at
+            LIMIT 100
+            """)
+    java.util.List<ServiceTicket> findQueue(String status);
+
+    @org.apache.ibatis.annotations.Update("""
+            UPDATE service_ticket SET status = #{next}
+            WHERE ticket_no = #{ticketId} AND status = #{expected}
+            """)
+    int transition(@Param("ticketId") String ticketId, @Param("expected") String expected,
+                   @Param("next") String next);
+
+    @Select("""
+            SELECT m.message_id, m.role, m.content, m.intent, m.trace_id, m.created_at,
+                   NULL AS feedback_rating, NULL AS feedback_reason, NULL AS feedback_comment,
+                   NULL AS feedback_updated_at
+            FROM chat_message m JOIN chat_session s ON s.id = m.session_id
+            JOIN service_ticket t ON t.conversation_id = s.session_id AND t.customer_id = s.customer_id
+            WHERE t.ticket_no = #{ticketId} ORDER BY m.created_at DESC, m.id DESC LIMIT 100
+            """)
+    java.util.List<com.example.microloan.agent.ChatMessageView> findContext(String ticketId);
+
+    @Insert("""
+            INSERT INTO ticket_action(ticket_no, from_status, to_status, note)
+            VALUES (#{ticketId}, #{expected}, #{next}, #{note})
+            """)
+    int audit(@Param("ticketId") String ticketId, @Param("expected") String expected,
+              @Param("next") String next, @Param("note") String note);
 }
