@@ -126,14 +126,22 @@ public class AgentOrchestrator {
         return guarded.state();
     }
 
+    /**
+     * 执行前置风险节点：规则筛查 → 可选模型补充 → 安全策略合并 → 状态快照与审计。
+     * 返回的风险等级供上层决定是否跳过普通意图分类并转入高优先级人工工单路线；本节点不创建工单。
+     * 模型不可用已由分类链内部降级；仍向外抛出的异常必须中止本轮，不能假定客户消息为低风险。
+     */
     private AgentState traceRisk(TraceContext trace, AgentState state) {
         long started = System.nanoTime();
         try {
             RiskAssessment assessment = riskClassifier.classify(state.content());
+            // 路由只需要等级与工单类型；类别、来源、置信度和规则编号完整写入 Trace，便于复盘决策。
             AgentState result = state.withRisk(assessment);
+            // 输入摘要只传消息标识，不把客户原文复制到风险审计中；耗时覆盖分类及状态构造，不含本次写库。
             traceService.riskSuccess(trace, "messageId=" + state.messageId(), assessment, elapsedMs(started));
             return result;
         } catch (RuntimeException exception) {
+            // 失败审计只记录异常类型；保留原异常交给上层处理，不在编排层另造一个低风险结果。
             traceService.failed(trace, "RISK_CLASSIFIER", "messageId=" + state.messageId(), exception,
                     elapsedMs(started));
             throw exception;

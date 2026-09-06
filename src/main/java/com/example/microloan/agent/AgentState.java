@@ -39,6 +39,7 @@ public record AgentState(
                 toolResult, finalAnswer);
     }
 
+    /** 创建风险节点后的不可变快照；仅替换路由需要的等级和工单类型，其余风险证据由 Trace 保存。 */
     public AgentState withRisk(RiskAssessment assessment) {
         return new AgentState(traceId, sessionId, messageId, content, selectedLoanId, selectedApplicationId,
                 selectedProductCode, selectedRegion, settlementDate, assessment.level(), assessment.ticketType(),

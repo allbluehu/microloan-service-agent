@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * 真实模型调用的统一可靠性边界。
  *
  * <p>调用方提交同步 Supplier，本类按“并发许可 → 熔断许可 → 虚拟线程执行 → 总超时”顺序控制调用，
- * 并记录低基数指标。异常返回给 IntentClassifier，由分类器决定规则降级；本类不理解意图和业务数据。</p>
+ * 并记录低基数指标。异常交回意图或风险分类器，由各自策略决定降级；本类不解释模型协议和业务数据。</p>
  */
 public class ModelCallExecutor {
     private final Duration timeout;
@@ -51,7 +51,8 @@ public class ModelCallExecutor {
     }
 
     /**
-     * 在配置的总预算内执行一次模型调用。
+     * 在配置的总预算内执行一次模型调用，包括 Supplier 内部的提示词构造及模型客户端有限重试。
+     * 风险与意图分类复用该组件，因此共享实例级并发容量和熔断状态。
      *
      * @throws RuntimeException 容量耗尽、熔断、超时或供应商调用失败；调用方不得将异常正文返回客户
      */
@@ -73,11 +74,12 @@ public class ModelCallExecutor {
             Future<String> future = executor.submit(invocation::get);
             try {
                 String result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+                // 此处成功仅指 Supplier 正常返回；非法协议或低置信度由外层分类器处理，不计入调用熔断失败。
                 circuitBreaker.recordSuccess();
                 outcome = "success";
                 return result;
             } catch (TimeoutException exception) {
-                // 中断超时任务，避免迟到的模型结果在请求结束后继续占用连接和计算资源。
+                // 尝试中断超时任务并丢弃迟到结果；底层客户端是否立即停止取决于其对线程中断的支持。
                 future.cancel(true);
                 circuitBreaker.recordFailure();
                 outcome = "timeout";

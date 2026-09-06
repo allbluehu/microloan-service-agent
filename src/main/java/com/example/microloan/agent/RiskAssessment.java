@@ -5,7 +5,7 @@ import com.example.microloan.ticket.TicketType;
 public record RiskAssessment(
         /** 当前消息的风险等级。 */
         RiskLevel level,
-        /** 高风险时建议创建的工单类型，低风险时为空。 */
+        /** 高风险或待复核信号建议采用的工单类型，低风险时为空。 */
         TicketType ticketType,
         /** 风险所属的受控业务类别。 */
         RiskCategory category,
@@ -13,7 +13,7 @@ public record RiskAssessment(
         RiskSource source,
         /** 判断置信度；规则明确命中为 1，模型结果使用协议返回值。 */
         double confidence,
-        /** 命中的稳定规则编号；非规则结果为空。 */
+        /** 命中的稳定规则编号；安全降级保留原规则编号，模型及默认结果为空。 */
         String ruleCode
 ) {
 
@@ -21,6 +21,7 @@ public record RiskAssessment(
         this(level, ticketType, categoryOf(ticketType), RiskSource.RULE, 1.0, null);
     }
 
+    /** 默认低风险表示未发现可采纳的高风险证据，不表示真实模型已经判断成功。 */
     public static RiskAssessment low() {
         return new RiskAssessment(RiskLevel.LOW, null, RiskCategory.NONE, RiskSource.DEFAULT, 1.0, null);
     }
