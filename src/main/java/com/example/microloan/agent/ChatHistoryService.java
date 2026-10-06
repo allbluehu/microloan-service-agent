@@ -28,7 +28,7 @@ public class ChatHistoryService {
                                                 String selectedLoanId, String selectedApplicationId,
                                                 String selectedProductCode, String selectedRegion) {
         // 先尝试幂等创建，再按 customerId 回查归属；全局相同 sessionId 不能被其他客户复用。
-        mapper.createSessionIfAbsent(sessionId, customerId);
+        int sessionIfAbsent = mapper.createSessionIfAbsent(sessionId, customerId);
         ChatSessionContext context = mapper.findOwnedSessionContext(sessionId, customerId);
         if (context == null) {
             // 会话标识已属于其他客户时拒绝复用，避免跨客户消息混入同一上下文。

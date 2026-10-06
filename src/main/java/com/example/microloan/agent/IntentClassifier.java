@@ -67,7 +67,8 @@ public class IntentClassifier {
         }
         try {
             ModelOutput parsed = objectMapper.readValue(output, ModelOutput.class);
-            if (parsed.intent() == null) {
+            // JSON 字面量 null 可被反序列化，但不构成合法分类结果。
+            if (parsed == null || parsed.intent() == null) {
                 return null;
             }
             Intent intent = Intent.valueOf(parsed.intent());
